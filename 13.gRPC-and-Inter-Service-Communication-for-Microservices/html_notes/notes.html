@@ -1563,7 +1563,7 @@ service UserService {
                         <div class="dots"><i></i><i></i><i></i></div>
                         <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span>
                                 Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button>
-                        </div>
+                        <button data-lang="ts"><span class="lang-ts">&#9679;</span> TypeScript</button><button data-lang="rs"><span class="lang-rs">&#9679;</span> Rust</button></div>
                     </div>
                     <div class="code-panel on" data-panel="go">
                         <pre><code class="language-go">// ===== SERVER =====
@@ -1659,7 +1659,166 @@ def call_get_user():
 if __name__ == "__main__":
     serve()</code></pre>
                     </div>
-                </div>
+                
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">// ===== SERVER =====
+import * as grpc from &#x27;@grpc/grpc-js&#x27;;
+// Generated from user.proto (conceptual)
+import { UserServiceService, IUserServiceServer } from &#x27;./gen/user_grpc_pb&#x27;;
+import { GetUserRequest, GetUserResponse, User, Role } from &#x27;./gen/user_pb&#x27;;
+
+// Implement the generated interface for forward-compat.
+class UserServer implements IUserServiceServer {
+    [name: string]: grpc.UntypedHandleCall;
+
+    // The method signature is generated FROM the proto: call, callback
+    getUser(
+        call: grpc.ServerUnaryCall&lt;GetUserRequest, GetUserResponse&gt;,
+        callback: grpc.sendUnaryData&lt;GetUserResponse&gt;
+    ): void {
+        const req = call.request;
+        if (!req.getId()) {
+            // typed error, sec 14
+            return callback({
+                code: grpc.status.INVALID_ARGUMENT,
+                message: &#x27;id is required&#x27;
+            }, null);
+        }
+        
+        // ...real work: query the DB by req.getId()...
+        const u = new User();
+        u.setId(req.getId());
+        u.setEmail(&#x27;ada@example.com&#x27;);
+        u.setFullName(&#x27;Ada&#x27;);
+        u.setRole(Role.ROLE_ADMIN);
+        
+        const resp = new GetUserResponse();
+        resp.setUser(u);
+        
+        callback(null, resp);
+    }
+}
+
+function main() {
+    const server = new grpc.Server();
+    // wire the impl to the service
+    server.addService(UserServiceService, new UserServer());
+    server.bindAsync(&#x27;0.0.0.0:50051&#x27;, grpc.ServerCredentials.createInsecure(), () =&gt; {
+        console.log(&#x27;gRPC on :50051&#x27;);
+        server.start();
+    });
+}
+
+// ===== CLIENT =====
+import { UserServiceClient } from &#x27;./gen/user_grpc_pb&#x27;;
+
+function callGetUser() {
+    // insecure creds for local dev only
+    const client = new UserServiceClient(&#x27;localhost:50051&#x27;, grpc.credentials.createInsecure());
+    
+    // always a deadline, sec 13
+    const deadline = new Date();
+    deadline.setSeconds(deadline.getSeconds() + 1);
+    
+    const req = new GetUserRequest();
+    req.setId(&#x27;u42&#x27;);
+    
+    // looks local, runs remote
+    client.getUser(req, { deadline }, (err, resp) =&gt; {
+        if (err) {
+            // err carries the gRPC status code
+            console.error(`GetUser failed: ${err.message}`);
+            return;
+        }
+        console.log(`got user: ${resp.getUser()?.getFullName()}`);
+    });
+}</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">// ===== SERVER =====
+use tonic::{transport::Server, Request, Response, Status, Code};
+use userv1::user_service_server::{UserService, UserServiceServer};
+use userv1::{GetUserRequest, GetUserResponse, User, Role};
+
+// generated from user.proto
+pub mod userv1 {
+    tonic::include_proto!(&quot;user.v1&quot;);
+}
+
+#[derive(Default)]
+pub struct MyServer {}
+
+#[tonic::async_trait]
+impl UserService for MyServer {
+    // The method signature is generated FROM the proto: req -&gt; Response, Status
+    async fn get_user(&amp;self, request: Request&lt;GetUserRequest&gt;) -&gt; Result&lt;Response&lt;GetUserResponse&gt;, Status&gt; {
+        let req = request.into_inner();
+        
+        if req.id.is_empty() {
+            // typed error, sec 14
+            return Err(Status::new(Code::InvalidArgument, &quot;id is required&quot;));
+        }
+        
+        // ...real work: query the DB by req.id...
+        let u = User {
+            id: req.id,
+            email: &quot;ada@example.com&quot;.to_string(),
+            full_name: &quot;Ada&quot;.to_string(),
+            role: Role::Admin as i32,
+            tags: vec![],
+            created_at: 0,
+        };
+        
+        Ok(Response::new(GetUserResponse { user: Some(u) }))
+    }
+}
+
+#[tokio::main]
+async fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+    let addr = &quot;[::1]:50051&quot;.parse()?;
+    let server = MyServer::default();
+
+    println!(&quot;gRPC on :50051&quot;);
+    // wire the impl to the service
+    Server::builder()
+        .add_service(UserServiceServer::new(server))
+        .serve(addr)
+        .await?;
+
+    Ok(())
+}
+
+// ===== CLIENT =====
+use userv1::user_service_client::UserServiceClient;
+use std::time::Duration;
+
+#[tokio::main]
+async fn call_get_user() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+    // insecure creds for local dev only (Tonic defaults to insecure unless TLS is configured)
+    let mut client = UserServiceClient::connect(&quot;http://[::1]:50051&quot;).await?;
+    
+    let mut req = Request::new(GetUserRequest {
+        id: &quot;u42&quot;.to_string(),
+    });
+    // always a deadline, sec 13
+    req.set_timeout(Duration::from_secs(1));
+
+    // looks local, runs remote
+    match client.get_user(req).await {
+        Ok(resp) =&gt; {
+            let u = resp.into_inner().user.unwrap();
+            println!(&quot;got user: {}&quot;, u.full_name);
+        }
+        Err(err) =&gt; {
+            // err carries the gRPC status code
+            eprintln!(&quot;GetUser failed: {}&quot;, err);
+        }
+    }
+    
+    Ok(())
+}</code></pre>
+          </div>
+</div>
                 <p class="code-cap">Notice the symmetry across languages: a generated <em>stub</em> on the client, a
                     generated
                     <em>servicer/server</em> base class on the server, and a method whose exact signature came from the
@@ -1715,7 +1874,7 @@ if __name__ == "__main__":
                         <div class="dots"><i></i><i></i><i></i></div>
                         <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span>
                                 Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button>
-                        </div>
+                        <button data-lang="ts"><span class="lang-ts">&#9679;</span> TypeScript</button><button data-lang="rs"><span class="lang-rs">&#9679;</span> Rust</button></div>
                     </div>
                     <div class="code-panel on" data-panel="go">
                         <pre><code class="language-go">// proto:  rpc ListUsers(ListUsersRequest) returns (stream User);
@@ -1759,7 +1918,118 @@ def list_users(stub):
     for u in responses:        # iterate until the server closes the stream
         print("user:", u.full_name)</code></pre>
                     </div>
-                </div>
+                
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">// proto: rpc ListUsers(ListUsersRequest) returns (stream User);
+import * as grpc from &#x27;@grpc/grpc-js&#x27;;
+
+// ===== SERVER: receive one req, call stream.write(...) repeatedly =====
+class UserServer {
+    listUsers(call: grpc.ServerWritableStream&lt;any, any&gt;) {
+        const filter = call.request.getFilter();
+        const users = queryUsers(filter); // imagine this yields a big result set
+        
+        for (const u of users) {
+            // push one message down the stream
+            call.write(u);
+        }
+        
+        // closes the stream cleanly (sends OK trailer)
+        call.end();
+    }
+}
+
+// ===== CLIENT: call once, then listen on &#x27;data&#x27; and &#x27;end&#x27; events =====
+function listUsers(client: any) {
+    const deadline = new Date();
+    deadline.setSeconds(deadline.getSeconds() + 10);
+    
+    const req = new ListUsersRequest();
+    req.setFilter(&quot;active&quot;);
+
+    const stream = client.listUsers(req, { deadline });
+    
+    stream.on(&#x27;data&#x27;, (u: any) =&gt; {
+        console.log(`user: ${u.getFullName()}`);
+    });
+    
+    stream.on(&#x27;end&#x27;, () =&gt; {
+        // server closed the stream, we&#x27;re done
+    });
+    
+    stream.on(&#x27;error&#x27;, (err: any) =&gt; {
+        console.error(err);
+    });
+}
+
+// Dummy definitions for types
+class ListUsersRequest { setFilter(f: string){} getFilter(){} }
+function queryUsers(f: any): any[] { return []; }</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">// proto:  rpc ListUsers(ListUsersRequest) returns (stream User);
+
+use tonic::{Request, Response, Status};
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
+
+// Dummy types
+pub struct ListUsersRequest { pub filter: String }
+pub struct User { pub full_name: String }
+pub struct MyServer;
+fn query_users(f: String) -&gt; Vec&lt;User&gt; { vec![] }
+pub trait UserService {}
+
+// ===== SERVER: receive one req, call stream.Send(...) repeatedly =====
+#[tonic::async_trait]
+impl MyServer {
+    // specify the stream type returned
+    type ListUsersStream = ReceiverStream&lt;Result&lt;User, Status&gt;&gt;;
+
+    async fn list_users(
+        &amp;self,
+        request: Request&lt;ListUsersRequest&gt;,
+    ) -&gt; Result&lt;Response&lt;Self::ListUsersStream&gt;, Status&gt; {
+        let filter = request.into_inner().filter;
+        
+        // imagine this yields a big result set
+        let users = query_users(filter);
+        
+        // create a channel to stream results
+        let (tx, rx) = mpsc::channel(4);
+        
+        tokio::spawn(async move {
+            for u in users {
+                // push one message down the stream
+                if tx.send(Ok(u)).await.is_err() {
+                    break; // client gone / cancelled
+                }
+            }
+            // returning nil (dropping tx) closes the stream cleanly (sends OK trailer)
+        });
+
+        Ok(Response::new(ReceiverStream::new(rx)))
+    }
+}
+
+// ===== CLIENT: call once, then stream.message() in a loop until None =====
+async fn list_users(mut client: AnyServiceClient) {
+    let mut req = Request::new(ListUsersRequest {
+        filter: &quot;active&quot;.to_string(),
+    });
+    req.set_timeout(std::time::Duration::from_secs(10));
+
+    let mut stream = client.list_users(req).await.unwrap().into_inner();
+    
+    while let Some(u) = stream.message().await.unwrap() {
+        // server closed the stream ,  we&#x27;re done when stream.message() returns None
+        println!(&quot;user: {}&quot;, u.full_name);
+    }
+}
+struct AnyServiceClient;
+impl AnyServiceClient { async fn list_users(&amp;mut self, req: Request&lt;ListUsersRequest&gt;) -&gt; Result&lt;Response&lt;tonic::Streaming&lt;User&gt;&gt;, Status&gt; { unimplemented!() } }</code></pre>
+          </div>
+</div>
                 <p class="code-cap">Go uses an explicit <code>stream.Send</code>/<code>stream.Recv</code> pair; Python
                     expresses
                     the server side as a <em>generator</em> (<code>yield</code>) and the client side as a plain
@@ -1810,7 +2080,7 @@ def list_users(stub):
                         <div class="dots"><i></i><i></i><i></i></div>
                         <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span>
                                 Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button>
-                        </div>
+                        <button data-lang="ts"><span class="lang-ts">&#9679;</span> TypeScript</button><button data-lang="rs"><span class="lang-rs">&#9679;</span> Rust</button></div>
                     </div>
                     <div class="code-panel on" data-panel="go">
                         <pre><code class="language-go">// proto:  rpc UploadEvents(stream Event) returns (UploadSummary);
@@ -1862,7 +2132,108 @@ def upload_events(stub, events):
     summary = stub.UploadEvents(gen(), timeout=30.0)  # returns the single summary
     print("server received", summary.received, "events")</code></pre>
                     </div>
-                </div>
+                
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">// proto:  rpc UploadEvents(stream Event) returns (UploadSummary);
+import * as grpc from &#x27;@grpc/grpc-js&#x27;;
+
+// ===== SERVER: on(&#x27;data&#x27;) in a loop, then callback() once at the end =====
+class UserServer {
+    uploadEvents(call: grpc.ServerReadableStream&lt;any, any&gt;, callback: grpc.sendUnaryData&lt;any&gt;) {
+        let count = 0;
+        
+        call.on(&#x27;data&#x27;, (ev: any) =&gt; {
+            store(ev);
+            count++;
+        });
+        
+        call.on(&#x27;end&#x27;, () =&gt; {
+            // client finished sending, now reply once
+            const summary = new UploadSummary();
+            summary.setReceived(count);
+            callback(null, summary);
+        });
+        
+        call.on(&#x27;error&#x27;, (err) =&gt; {
+            callback(err, null);
+        });
+    }
+}
+
+// ===== CLIENT: write() many, then end() to await the single reply =====
+function uploadEvents(client: any, events: any[]) {
+    const deadline = new Date();
+    deadline.setSeconds(deadline.getSeconds() + 30);
+    
+    const stream = client.uploadEvents({ deadline }, (err: any, summary: any) =&gt; {
+        // close our side, await the summary
+        if (err) {
+            console.error(err);
+            return;
+        }
+        console.log(`server received ${summary.getReceived()} events`);
+    });
+    
+    for (const ev of events) {
+        stream.write(ev); // push each one up
+    }
+    
+    stream.end(); // signal we&#x27;re done sending
+}
+
+// Dummy definitions
+class UploadSummary { setReceived(c: number){} getReceived(){ return 0; } }
+function store(e: any){}</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">// proto:  rpc UploadEvents(stream Event) returns (UploadSummary);
+
+use tonic::{Request, Response, Status};
+
+// Dummy types
+pub struct Event {}
+pub struct UploadSummary { pub received: i32 }
+pub struct MyServer;
+fn store(e: Event) {}
+
+// ===== SERVER: next() in a loop, then Ok(Response) once at the end =====
+#[tonic::async_trait]
+impl MyServer {
+    async fn upload_events(
+        &amp;self,
+        request: Request&lt;tonic::Streaming&lt;Event&gt;&gt;,
+    ) -&gt; Result&lt;Response&lt;UploadSummary&gt;, Status&gt; {
+        let mut stream = request.into_inner();
+        let mut count = 0;
+        
+        while let Some(ev) = stream.message().await? {
+            // client finished sending when stream.message() returns None, now reply once
+            store(ev);
+            count += 1;
+        }
+        
+        Ok(Response::new(UploadSummary { received: count }))
+    }
+}
+
+// ===== CLIENT: stream of requests, await the single reply =====
+async fn upload_events(mut client: AnyServiceClient, events: Vec&lt;Event&gt;) {
+    // create a stream of requests
+    let iter = events.into_iter().map(Ok);
+    let request_stream = futures::stream::iter(iter);
+    
+    let mut req = Request::new(request_stream);
+    req.set_timeout(std::time::Duration::from_secs(30));
+
+    // close our side, await the summary
+    let summary = client.upload_events(req).await.unwrap().into_inner();
+    
+    println!(&quot;server received {} events&quot;, summary.received);
+}
+struct AnyServiceClient;
+impl AnyServiceClient { async fn upload_events&lt;T&gt;(&amp;mut self, req: Request&lt;T&gt;) -&gt; Result&lt;Response&lt;UploadSummary&gt;, Status&gt; { unimplemented!() } }</code></pre>
+          </div>
+</div>
                 <p class="code-cap">The asymmetry is the point: <code>SendAndClose</code>/<code>CloseAndRecv</code> in
                     Go, a
                     <code>request_iterator</code> plus a normal <code>return</code> in Python, the server
@@ -1919,7 +2290,7 @@ def upload_events(stub, events):
                         <div class="dots"><i></i><i></i><i></i></div>
                         <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span>
                                 Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button>
-                        </div>
+                        <button data-lang="ts"><span class="lang-ts">&#9679;</span> TypeScript</button><button data-lang="rs"><span class="lang-rs">&#9679;</span> Rust</button></div>
                     </div>
                     <div class="code-panel on" data-panel="go">
                         <pre><code class="language-go">// proto:  rpc Chat(stream ChatMessage) returns (stream ChatMessage);
@@ -1972,7 +2343,130 @@ def chat(stub):
 
 # (for true concurrency under load, prefer the async API: grpc.aio)</code></pre>
                     </div>
-                </div>
+                
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">// proto:  rpc Chat(stream ChatMessage) returns (stream ChatMessage);
+import * as grpc from &#x27;@grpc/grpc-js&#x27;;
+
+// ===== SERVER: loop on(&#x27;data&#x27;) and call write() on the same stream =====
+class UserServer {
+    chat(call: grpc.ServerDuplexStream&lt;any, any&gt;) {
+        call.on(&#x27;data&#x27;, (msg: any) =&gt; {
+            // echo back (or broadcast to a room, etc.), can write anytime, any number
+            const reply = new ChatMessage();
+            reply.setUser(&quot;server&quot;);
+            reply.setText(&quot;ack: &quot; + msg.getText());
+            call.write(reply);
+        });
+        
+        call.on(&#x27;end&#x27;, () =&gt; {
+            // client closed its send side
+            call.end();
+        });
+    }
+}
+
+// ===== CLIENT: typically write concurrently, read via events =====
+function chat(client: any) {
+    const stream = client.chat();
+    
+    // concurrent receiver
+    stream.on(&#x27;data&#x27;, (inMsg: any) =&gt; {
+        console.log(`&lt;&lt; ${inMsg.getText()}`);
+    });
+    
+    stream.on(&#x27;end&#x27;, () =&gt; {
+        // server done
+    });
+    
+    stream.on(&#x27;error&#x27;, (err: any) =&gt; {
+        console.error(err);
+    });
+    
+    for (const t of [&quot;hi&quot;, &quot;how are you&quot;, &quot;bye&quot;]) {
+        const msg = new ChatMessage();
+        msg.setUser(&quot;ada&quot;);
+        msg.setText(t);
+        stream.write(msg); // send concurrently
+    }
+    
+    stream.end(); // signal we&#x27;re done sending; receiver drains the rest
+}
+
+class ChatMessage {
+    setUser(u: string){}
+    setText(t: string){}
+    getText(){ return &quot;&quot;; }
+}</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">// proto:  rpc Chat(stream ChatMessage) returns (stream ChatMessage);
+
+use tonic::{Request, Response, Status};
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
+
+pub struct ChatMessage { pub user: String, pub text: String }
+pub struct MyServer;
+
+// ===== SERVER: loop next() and send on the same stream =====
+#[tonic::async_trait]
+impl MyServer {
+    type ChatStream = ReceiverStream&lt;Result&lt;ChatMessage, Status&gt;&gt;;
+
+    async fn chat(
+        &amp;self,
+        request: Request&lt;tonic::Streaming&lt;ChatMessage&gt;&gt;,
+    ) -&gt; Result&lt;Response&lt;Self::ChatStream&gt;, Status&gt; {
+        let mut stream = request.into_inner();
+        let (tx, rx) = mpsc::channel(10);
+        
+        tokio::spawn(async move {
+            while let Ok(Some(msg)) = stream.message().await {
+                // echo back (or broadcast to a room, etc.), can Send anytime, any number
+                let reply = ChatMessage {
+                    user: &quot;server&quot;.to_string(),
+                    text: format!(&quot;ack: {}&quot;, msg.text),
+                };
+                if tx.send(Ok(reply)).await.is_err() {
+                    break;
+                }
+            }
+            // client closed its send side
+        });
+        
+        Ok(Response::new(ReceiverStream::new(rx)))
+    }
+}
+
+// ===== CLIENT: typically send in one task, recv in another =====
+async fn chat(mut client: AnyServiceClient) {
+    let (tx, rx) = mpsc::channel(10);
+    
+    // concurrent receiver via returned stream
+    let mut stream = client.chat(Request::new(ReceiverStream::new(rx))).await.unwrap().into_inner();
+    
+    tokio::spawn(async move {
+        while let Some(in_msg) = stream.message().await.unwrap() {
+            println!(&quot;&lt;&lt; {}&quot;, in_msg.text);
+        }
+    });
+    
+    for t in &amp;[&quot;hi&quot;, &quot;how are you&quot;, &quot;bye&quot;] {
+        let msg = ChatMessage {
+            user: &quot;ada&quot;.to_string(),
+            text: t.to_string(),
+        };
+        tx.send(msg).await.unwrap(); // send concurrently
+    }
+    
+    // signal we&#x27;re done sending; receiver drains the rest by dropping tx
+    drop(tx);
+}
+struct AnyServiceClient;
+impl AnyServiceClient { async fn chat&lt;T&gt;(&amp;mut self, req: Request&lt;T&gt;) -&gt; Result&lt;Response&lt;tonic::Streaming&lt;ChatMessage&gt;&gt;, Status&gt; { unimplemented!() } }</code></pre>
+          </div>
+</div>
 
                 <div class="box gotcha"><span class="tag">Streaming gotchas to respect</span>
                     <p>Streams are long-lived, so they consume a connection/goroutine for their lifetime, always
@@ -2092,7 +2586,7 @@ def chat(stub):
                         <div class="dots"><i></i><i></i><i></i></div>
                         <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span>
                                 Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button>
-                        </div>
+                        <button data-lang="ts"><span class="lang-ts">&#9679;</span> TypeScript</button><button data-lang="rs"><span class="lang-rs">&#9679;</span> Rust</button></div>
                     </div>
                     <div class="code-panel on" data-panel="go">
                         <pre><code class="language-go">// Install the two plugins once (they sit on your PATH):
@@ -2131,7 +2625,44 @@ def chat(stub):
 #   import user_pb2 as pb
 #   import user_pb2_grpc as pb_grpc</code></pre>
                     </div>
-                </div>
+                
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">// Install the two plugins once (they sit on your PATH):
+//   go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+//   go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+
+// Generate messages (--go_out) AND the service stubs/skeleton (--go-grpc_out):
+//   protoc \
+//     --go_out=. --go_opt=paths=source_relative \
+//     --go-grpc_out=. --go-grpc_opt=paths=source_relative \
+//     user.proto
+
+// Produces:
+//   user.pb.go, structs for each message (+ getters)
+//   user_grpc.pb.go, UserServiceClient (stub) + UserServiceServer (to implement)
+
+// Then in code you simply import the generated package:
+//   import userv1 &quot;example.com/gen/userv1&quot;</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">// Install the two plugins once (they sit on your PATH):
+//   go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+//   go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+
+// Generate messages (--go_out) AND the service stubs/skeleton (--go-grpc_out):
+//   protoc \
+//     --go_out=. --go_opt=paths=source_relative \
+//     --go-grpc_out=. --go-grpc_opt=paths=source_relative \
+//     user.proto
+
+// Produces:
+//   user.pb.go, structs for each message (+ getters)
+//   user_grpc.pb.go, UserServiceClient (stub) + UserServiceServer (to implement)
+
+// Then in code you simply import the generated package:
+//   import userv1 &quot;example.com/gen/userv1&quot;</code></pre>
+          </div>
+</div>
 
                 <div class="box note"><span class="tag">Use buf in real projects</span>
                     <p>Raw <code>protoc</code> invocations get unwieldy fast. The <strong>buf</strong> toolchain wraps
@@ -2255,7 +2786,7 @@ def chat(stub):
                         <div class="dots"><i></i><i></i><i></i></div>
                         <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span>
                                 Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button>
-                        </div>
+                        <button data-lang="ts"><span class="lang-ts">&#9679;</span> TypeScript</button><button data-lang="rs"><span class="lang-rs">&#9679;</span> Rust</button></div>
                     </div>
                     <div class="code-panel on" data-panel="go">
                         <pre><code class="language-go">// ===== CLIENT: attach a deadline + metadata =====
@@ -2306,7 +2837,124 @@ class UserService(pb_grpc.UserServiceServicer):
             return pb.GetUserResponse()      # abandon the work
         return self.lookup(request.id)</code></pre>
                     </div>
-                </div>
+                
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">import * as grpc from &#x27;@grpc/grpc-js&#x27;;
+
+// ===== CLIENT: attach a deadline + metadata =====
+const deadline = new Date();
+deadline.setSeconds(deadline.getSeconds() + 1); // absolute deadline
+
+const meta = new grpc.Metadata();
+const token = &quot;my-token&quot;;
+const reqID = &quot;12345&quot;;
+meta.add(&#x27;authorization&#x27;, &#x27;Bearer &#x27; + token);   // auth travels as metadata, sec 16
+meta.add(&#x27;x-request-id&#x27;, reqID);              // trace id for correlation, like sec 15 of the layers manual
+
+const client = new UserServiceClient(&#x27;localhost:50051&#x27;, grpc.credentials.createInsecure());
+const req = new GetUserRequest();
+req.setId(&quot;u42&quot;);
+
+client.getUser(req, meta, { deadline }, (err: grpc.ServiceError, resp: any) =&gt; {
+    if (err) {
+        if (err.code === grpc.status.DEADLINE_EXCEEDED) {
+            console.log(&quot;call timed out&quot;); // a network-shaped failure a local call never had
+        }
+    }
+});
+
+// ===== SERVER: read metadata, respect the inherited deadline =====
+class UserServer {
+    getUser(
+        call: grpc.ServerUnaryCall&lt;GetUserRequest, GetUserResponse&gt;,
+        callback: grpc.sendUnaryData&lt;GetUserResponse&gt;
+    ) {
+        const md = call.metadata;
+        const auth = md.get(&#x27;authorization&#x27;); // verify token here (or in an interceptor, sec 15)
+
+        // The gRPC Node library handles cancellation automatically. If the client 
+        // cancels or times out, the call will emit a &#x27;cancelled&#x27; event.
+        if (call.cancelled) {
+            return callback({ code: grpc.status.CANCELLED, message: &#x27;Cancelled&#x27;, name: &#x27;Error&#x27; }, null);
+        }
+        
+        call.on(&#x27;cancelled&#x27;, () =&gt; {
+            // pass it straight to the DB driver so slow work is abandoned automatically
+        });
+
+        this.lookup(call.request.getId(), (err, user) =&gt; {
+            if (call.cancelled) return;
+            if (err) return callback(err, null);
+            const resp = new GetUserResponse();
+            resp.setUser(user);
+            callback(null, resp);
+        });
+    }
+
+    lookup(id: string, cb: (err: any, u: User) =&gt; void) { cb(null, new User()); }
+}
+
+// Dummy classes
+class UserServiceClient { constructor(a:any,b:any){} getUser(a:any,b:any,c:any,d:any){} }
+class GetUserRequest { setId(i:string){} getId(){ return &quot;&quot;; } }
+class GetUserResponse { setUser(u:any){} }
+class User {}</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">use tonic::{Request, Response, Status, metadata::MetadataValue};
+use std::time::Duration;
+
+// ===== CLIENT: attach a deadline + metadata =====
+async fn call_with_meta(mut client: AnyServiceClient) {
+    let mut req = Request::new(GetUserRequest { id: &quot;u42&quot;.to_string() });
+    
+    // absolute deadline
+    req.set_timeout(Duration::from_secs(1));
+    
+    let token = &quot;my-token&quot;;
+    let req_id = &quot;12345&quot;;
+    
+    // auth travels as metadata, sec 16
+    let auth_val: MetadataValue&lt;_&gt; = format!(&quot;Bearer {}&quot;, token).parse().unwrap();
+    req.metadata_mut().insert(&quot;authorization&quot;, auth_val);
+    
+    // trace id for correlation, like sec 15 of the layers manual
+    req.metadata_mut().insert(&quot;x-request-id&quot;, req_id.parse().unwrap());
+    
+    match client.get_user(req).await {
+        Err(e) if e.code() == tonic::Code::DeadlineExceeded =&gt; {
+            println!(&quot;call timed out&quot;); // a network-shaped failure a local call never had
+        }
+        _ =&gt; {}
+    }
+}
+
+// ===== SERVER: read metadata, respect the inherited deadline =====
+#[tonic::async_trait]
+impl MyServer {
+    async fn get_user(&amp;self, request: Request&lt;GetUserRequest&gt;) -&gt; Result&lt;Response&lt;GetUserResponse&gt;, Status&gt; {
+        let md = request.metadata();
+        let auth = md.get(&quot;authorization&quot;); // verify token here (or in an interceptor, sec 15)
+
+        // In Tonic/Tokio, cancellation is handled by dropping the future.
+        // If the client disconnects or times out, the `get_user` future is dropped.
+        // pass it straight to the DB driver so slow work is abandoned automatically.
+
+        let _ = auth;
+        let id = request.into_inner().id;
+        self.lookup(&amp;id).await
+    }
+}
+
+// Dummy structs
+pub struct GetUserRequest { pub id: String }
+pub struct GetUserResponse {}
+pub struct AnyServiceClient;
+impl AnyServiceClient { async fn get_user(&amp;mut self, req: Request&lt;GetUserRequest&gt;) -&gt; Result&lt;Response&lt;GetUserResponse&gt;, Status&gt; { unimplemented!() } }
+pub struct MyServer;
+impl MyServer { async fn lookup(&amp;self, id: &amp;str) -&gt; Result&lt;Response&lt;GetUserResponse&gt;, Status&gt; { unimplemented!() } }</code></pre>
+          </div>
+</div>
 
                 <div class="box gotcha"><span class="tag">Pass the context down, always</span>
                     <p>In Go, thread the incoming <code>ctx</code> into <em>every</em> downstream call (DB queries,
@@ -2411,7 +3059,7 @@ class UserService(pb_grpc.UserServiceServicer):
                         <div class="dots"><i></i><i></i><i></i></div>
                         <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span>
                                 Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button>
-                        </div>
+                        <button data-lang="ts"><span class="lang-ts">&#9679;</span> TypeScript</button><button data-lang="rs"><span class="lang-rs">&#9679;</span> Rust</button></div>
                     </div>
                     <div class="code-panel on" data-panel="go">
                         <pre><code class="language-go">import (
@@ -2466,7 +3114,119 @@ except grpc.RpcError as e:
     else:
         print("unexpected:", e.code(), e.details())</code></pre>
                     </div>
-                </div>
+                
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">import * as grpc from &#x27;@grpc/grpc-js&#x27;;
+
+// SERVER: return a typed status, not a bare error string.
+class UserServer {
+    getUser(
+        call: grpc.ServerUnaryCall&lt;GetUserRequest, GetUserResponse&gt;,
+        callback: grpc.sendUnaryData&lt;GetUserResponse&gt;
+    ) {
+        const req = call.request;
+        if (!req.getId()) {
+            return callback({
+                code: grpc.status.INVALID_ARGUMENT,
+                message: &quot;id is required&quot;,
+                name: &#x27;Error&#x27;
+            }, null);
+        }
+        
+        const user = this.dbFind(req.getId());
+        if (!user) {
+            return callback({
+                code: grpc.status.NOT_FOUND,
+                message: `no user with id &quot;${req.getId()}&quot;`,
+                name: &#x27;Error&#x27;
+            }, null);
+        }
+        
+        const resp = new GetUserResponse();
+        resp.setUser(user);
+        callback(null, resp);
+    }
+    
+    dbFind(id: string): any { return null; }
+}
+
+// CLIENT: inspect the code to decide what to do.
+function clientCall(client: any, req: any) {
+    client.getUser(req, (err: grpc.ServiceError, resp: any) =&gt; {
+        if (err) {
+            // pull the status out of the error (in TS, the error object IS the status)
+            switch (err.code) {
+                case grpc.status.NOT_FOUND:
+                    // expected, show &quot;not found&quot; in UI
+                    break;
+                case grpc.status.UNAVAILABLE:
+                    // transient, retry with backoff, sec 17
+                    break;
+                default:
+                    console.log(`unexpected: ${err.code}: ${err.message}`);
+            }
+        }
+    });
+}
+
+// Dummies
+class GetUserRequest { getId(){ return &quot;&quot;; } }
+class GetUserResponse { setUser(u:any){} }</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">use tonic::{Request, Response, Status, Code};
+
+// SERVER: return a typed status, not a bare error string.
+#[tonic::async_trait]
+impl MyServer {
+    async fn get_user(&amp;self, request: Request&lt;GetUserRequest&gt;) -&gt; Result&lt;Response&lt;GetUserResponse&gt;, Status&gt; {
+        let req = request.into_inner();
+        
+        if req.id.is_empty() {
+            return Err(Status::new(Code::InvalidArgument, &quot;id is required&quot;));
+        }
+        
+        let u = self.db.find(&amp;req.id);
+        if u.is_none() {
+            return Err(Status::new(Code::NotFound, format!(&quot;no user with id {:?}&quot;, req.id)));
+        }
+        
+        Ok(Response::new(GetUserResponse { user: u }))
+    }
+}
+
+// CLIENT: inspect the code to decide what to do.
+async fn client_call(mut client: AnyServiceClient, req: Request&lt;GetUserRequest&gt;) {
+    match client.get_user(req).await {
+        Ok(resp) =&gt; { /* use resp */ }
+        Err(st) =&gt; {
+            // pull the status out of the error (st is already Status)
+            match st.code() {
+                Code::NotFound =&gt; {
+                    // expected ,  show &quot;not found&quot; in UI
+                }
+                Code::Unavailable =&gt; {
+                    // transient ,  retry with backoff, sec 17
+                }
+                _ =&gt; {
+                    println!(&quot;unexpected: {:?}: {}&quot;, st.code(), st.message());
+                }
+            }
+        }
+    }
+}
+
+// Dummies
+pub struct GetUserRequest { pub id: String }
+pub struct GetUserResponse { pub user: Option&lt;User&gt; }
+pub struct User {}
+pub struct MyServer { db: Db }
+pub struct Db {}
+impl Db { fn find(&amp;self, id: &amp;str) -&gt; Option&lt;User&gt; { None } }
+pub struct AnyServiceClient;
+impl AnyServiceClient { async fn get_user(&amp;mut self, req: Request&lt;GetUserRequest&gt;) -&gt; Result&lt;Response&lt;GetUserResponse&gt;, Status&gt; { unimplemented!() } }</code></pre>
+          </div>
+</div>
 
                 <div class="box note"><span class="tag">Rich, structured errors</span>
                     <p>When a code + message isn't enough (e.g. per-field validation details, like the REST error
@@ -2542,7 +3302,7 @@ except grpc.RpcError as e:
                         <div class="dots"><i></i><i></i><i></i></div>
                         <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span>
                                 Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button>
-                        </div>
+                        <button data-lang="ts"><span class="lang-ts">&#9679;</span> TypeScript</button><button data-lang="rs"><span class="lang-rs">&#9679;</span> Rust</button></div>
                     </div>
                     <div class="code-panel on" data-panel="go">
                         <pre><code class="language-go">// A unary server interceptor: signature is fixed by the framework.
@@ -2595,7 +3355,116 @@ server = grpc.server(
 # Client-side interceptors also exist (e.g. to inject auth on every call):
 #   channel = grpc.intercept_channel(base_channel, MyClientInterceptor())</code></pre>
                     </div>
-                </div>
+                
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">import * as grpc from &#x27;@grpc/grpc-js&#x27;;
+
+// Node.js gRPC handles interceptors quite differently from Go. 
+// However, in @grpc/grpc-js there is interceptor support for clients, 
+// and middleware-like patterns for servers (often through wrappers).
+// We&#x27;ll show a conceptual interceptor wrapper for a server method, 
+// or how client interceptors work.
+
+// A unary server interceptor concept:
+function authInterceptor(
+    call: grpc.ServerUnaryCall&lt;any, any&gt;,
+    callback: grpc.sendUnaryData&lt;any&gt;,
+    next: Function
+) {
+    const md = call.metadata;
+    const tokens = md.get(&quot;authorization&quot;);
+    
+    if (tokens.length === 0 || !valid(tokens[0])) {
+        return callback({
+            code: grpc.status.UNAUTHENTICATED,
+            message: &quot;missing or invalid token&quot;,
+            name: &quot;Error&quot;
+        }, null);
+    }
+    
+    // attach the verified identity for the handler to read from call
+    (call as any).user = parse(tokens[0]);
+    
+    // call the next link / the real handler
+    next(call, callback);
+}
+
+function loggingInterceptor(
+    call: grpc.ServerUnaryCall&lt;any, any&gt;,
+    callback: grpc.sendUnaryData&lt;any&gt;,
+    next: Function
+) {
+    const start = Date.now();
+    
+    // intercept the callback
+    const wrappedCallback = (err: any, value: any) =&gt; {
+        const duration = Date.now() - start;
+        console.log(`Call took ${duration}ms -&gt; code: ${err ? err.code : 0}`);
+        callback(err, value);
+    };
+    
+    next(call, wrappedCallback);
+}
+
+// In practice, you wrap your handlers when building the server:
+// Register the chain when building the server (outermost listed first):
+function applyInterceptors(handler: Function, ...interceptors: Function[]) {
+    return interceptors.reduceRight(
+        (next, interceptor) =&gt; (call: any, cb: any) =&gt; interceptor(call, cb, next),
+        handler
+    );
+}
+
+// Example of binding it
+// server.addService(UserServiceService, {
+//    getUser: applyInterceptors(realGetUser, loggingInterceptor, authInterceptor)
+// });
+
+// Dummies
+function valid(t: any): boolean { return true; }
+function parse(t: any): any { return {}; }</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">use tonic::{Request, Status, service::Interceptor};
+
+// tonic interceptors run before the request is routed to the handler
+
+// A unary server interceptor: signature is fixed by the framework.
+fn auth_interceptor(mut req: Request&lt;()&gt;) -&gt; Result&lt;Request&lt;()&gt;, Status&gt; {
+    match req.metadata().get(&quot;authorization&quot;) {
+        Some(t) if valid(t) =&gt; {
+            // attach the verified identity for the handler to read from ctx
+            let user = parse(t);
+            req.extensions_mut().insert(user);
+            Ok(req) // call the next link / the real handler
+        }
+        _ =&gt; Err(Status::unauthenticated(&quot;missing or invalid token&quot;)),
+    }
+}
+
+// For logging in Tonic, you usually use a `tower` middleware layer instead 
+// of an interceptor, because interceptors can&#x27;t easily run code *after* the handler.
+// Here&#x27;s the tower middleware concept:
+//
+// let layer = tower::ServiceBuilder::new()
+//     .layer(tower_http::trace::TraceLayer::new_for_grpc())
+//     .into_inner();
+
+// Register the chain when building the server (outermost listed first):
+// let svc = UserServiceServer::with_interceptor(MyServer::default(), auth_interceptor);
+// Server::builder()
+//     .layer(layer)
+//     .add_service(svc)
+//     .serve(addr)
+//     .await?;
+
+// Dummies
+fn valid(t: &amp;tonic::metadata::MetadataValue&lt;tonic::metadata::Ascii&gt;) -&gt; bool { true }
+#[derive(Clone, Copy, Send, Sync, &#x27;static)]
+pub struct UserKey;
+fn parse(t: &amp;tonic::metadata::MetadataValue&lt;tonic::metadata::Ascii&gt;) -&gt; UserKey { UserKey }</code></pre>
+          </div>
+</div>
                 <p class="code-cap">This is the gRPC home for everything the layers manual put in middleware: auth,
                     logging,
                     tracing, rate limiting, panic recovery, written once, applied to every method.</p>
@@ -2653,7 +3522,7 @@ server = grpc.server(
                         <div class="dots"><i></i><i></i><i></i></div>
                         <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span>
                                 Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button>
-                        </div>
+                        <button data-lang="ts"><span class="lang-ts">&#9679;</span> TypeScript</button><button data-lang="rs"><span class="lang-rs">&#9679;</span> Rust</button></div>
                     </div>
                     <div class="code-panel on" data-panel="go">
                         <pre><code class="language-go">import "google.golang.org/grpc/credentials"
@@ -2699,7 +3568,106 @@ call_creds = grpc.metadata_call_credentials(TokenAuth(token))
 composite  = grpc.composite_channel_credentials(channel_creds, call_creds)
 channel    = grpc.secure_channel("api.example.com:443", composite)</code></pre>
                     </div>
-                </div>
+                
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">import * as grpc from &#x27;@grpc/grpc-js&#x27;;
+import * as fs from &#x27;fs&#x27;;
+
+// ===== SERVER over TLS =====
+// const serverCerts = fs.readFileSync(&#x27;server.crt&#x27;);
+// const serverKey = fs.readFileSync(&#x27;server.key&#x27;);
+// const creds = grpc.ServerCredentials.createSsl(null, [{
+//     cert_chain: serverCerts,
+//     private_key: serverKey
+// }]);
+
+// every connection is now encrypted
+// const server = new grpc.Server();
+// server.bindAsync(&#x27;0.0.0.0:443&#x27;, creds, ...);
+
+// ===== CLIENT over TLS =====
+// const rootCerts = fs.readFileSync(&#x27;ca.crt&#x27;);
+// const tlsCreds = grpc.credentials.createSsl(rootCerts); // trust this CA
+
+const tlsCreds = grpc.credentials.createInsecure(); // Dummy for compilation
+const client = new UserServiceClient(&#x27;api.example.com:443&#x27;, tlsCreds);
+
+// ===== Per-call token (combine with TLS) =====
+// Implement CallCredentials so a fresh token rides on every call:
+const token = &quot;my-secret-token&quot;;
+const tokenCreds = grpc.credentials.createFromMetadataGenerator((args, cb) =&gt; {
+    const md = new grpc.Metadata();
+    md.add(&#x27;authorization&#x27;, &#x27;Bearer &#x27; + token);
+    cb(null, md);
+});
+
+// combine transport and per-call credentials
+const combinedCreds = grpc.credentials.combineChannelCredentials(
+    tlsCreds,
+    tokenCreds
+);
+
+const clientWithToken = new UserServiceClient(&#x27;api.example.com:443&#x27;, combinedCreds);
+
+class UserServiceClient { constructor(a:any, b:any){} }</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">use tonic::transport::{Certificate, Identity, Server, ClientTlsConfig, Channel};
+use tonic::metadata::MetadataValue;
+use std::fs;
+
+#[tokio::main]
+async fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+    // ===== SERVER over TLS =====
+    /* 
+    let cert = fs::read(&quot;server.crt&quot;)?;
+    let key = fs::read(&quot;server.key&quot;)?;
+    let identity = Identity::from_pem(cert, key);
+    
+    let tls_config = tonic::transport::ServerTlsConfig::new()
+        .identity(identity);
+
+    // every connection is now encrypted
+    Server::builder()
+        .tls_config(tls_config)?
+        .add_service(svc)
+        .serve(addr)
+        .await?;
+    */
+
+    // ===== CLIENT over TLS =====
+    /*
+    let root_ca = fs::read(&quot;ca.crt&quot;)?;
+    let cert = Certificate::from_pem(root_ca); // trust this CA
+    
+    let tls_config = ClientTlsConfig::new()
+        .ca_certificate(cert)
+        .domain_name(&quot;api.example.com&quot;);
+
+    let channel = Channel::from_static(&quot;https://api.example.com:443&quot;)
+        .tls_config(tls_config)?
+        .connect()
+        .await?;
+
+    let mut client = UserServiceClient::new(channel);
+    */
+
+    // ===== Per-call token (combine with TLS) =====
+    // Use an interceptor to attach the token so a fresh token rides on every call:
+    let token = &quot;my-secret-token&quot;;
+    let token_val: MetadataValue&lt;_&gt; = format!(&quot;Bearer {}&quot;, token).parse()?;
+    
+    let auth_interceptor = move |mut req: tonic::Request&lt;()&gt;| {
+        req.metadata_mut().insert(&quot;authorization&quot;, token_val.clone());
+        Ok(req)
+    };
+
+    // let mut client_with_token = UserServiceClient::with_interceptor(channel, auth_interceptor);
+
+    Ok(())
+}</code></pre>
+          </div>
+</div>
 
                 <div class="box gotcha"><span class="tag">Never send tokens over plaintext</span>
                     <p>Bearer tokens are like passwords, whoever holds one can impersonate the caller (echoing

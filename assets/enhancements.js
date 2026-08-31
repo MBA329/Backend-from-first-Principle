@@ -54,9 +54,13 @@
     blocks.forEach(function (block) {
       var pyPanel = block.querySelector('[data-panel="py"]');
       var goPanel = block.querySelector('[data-panel="go"]');
+      var tsPanel = block.querySelector('[data-panel="ts"]');
+      var rsPanel = block.querySelector('[data-panel="rs"]');
 
       if (pyPanel) addRunButton(pyPanel, block, 'python', '3.10.0');
       if (goPanel) addRunButton(goPanel, block, 'go', '1.16.2');
+      if (tsPanel) addRunButton(tsPanel, block, 'typescript', '1.20.0');
+      if (rsPanel) addRunButton(rsPanel, block, 'rust', '1.68.2');
     });
   }
 
@@ -66,7 +70,13 @@
 
     var btn = document.createElement('button');
     btn.className = 'code-run-btn';
-    btn.textContent = lang === 'python' ? 'Run Python' : 'Run Go';
+    var langNames = {
+      'python': 'Python',
+      'go': 'Go',
+      'typescript': 'TypeScript',
+      'rust': 'Rust'
+    };
+    btn.textContent = 'Run ' + (langNames[lang] || lang);
     btn.setAttribute('data-lang', lang);
     btn.setAttribute('data-version', version);
 
@@ -1360,6 +1370,11 @@
     } else if (lang === 'javascript' || lang === 'typescript') {
       src = src.replace(/\b(async|await|break|case|catch|class|const|continue|debugger|default|delete|do|else|export|extends|finally|for|function|if|import|in|instanceof|new|return|super|switch|this|throw|try|typeof|var|void|while|with|yield|let|enum|interface|type|from|as|of|null|undefined|true|false)\b/g, '<span class="tok-kw">$1</span>');
       src = src.replace(/\b(string|number|boolean|any|void|never|unknown|object|Promise|Array|Record)\b/g, '<span class="tok-type">$1</span>');
+      src = src.replace(/\b([A-Za-z0-9_]+)\b(?=\s*\()/g, '<span class="tok-fn">$1</span>');
+      src = src.replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="tok-num">$1</span>');
+    } else if (lang === 'rust') {
+      src = src.replace(/\b(as|async|await|break|const|continue|crate|dyn|else|enum|extern|false|fn|for|if|impl|in|let|loop|match|mod|move|mut|pub|ref|return|self|Self|static|struct|super|trait|true|type|unsafe|use|where|while|macro_rules)\b/g, '<span class="tok-kw">$1</span>');
+      src = src.replace(/\b(i8|i16|i32|i64|i128|isize|u8|u16|u32|u64|u128|usize|f32|f64|bool|char|str|String|Option|Result|Vec|Box|Rc|Arc)\b/g, '<span class="tok-type">$1</span>');
       src = src.replace(/\b([A-Za-z0-9_]+)\b(?=\s*\()/g, '<span class="tok-fn">$1</span>');
       src = src.replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="tok-num">$1</span>');
     } else {

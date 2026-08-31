@@ -973,7 +973,7 @@ body{padding-bottom:80px;}
 
         <div class="codeblock" data-cb>
           <div class="code-bar"><div class="dots"><i></i><i></i><i></i></div>
-            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button></div></div>
+            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button><button data-lang="ts"><span class="lang-ts">&#9679;</span> TypeScript</button><button data-lang="rs"><span class="lang-rs">&#9679;</span> Rust</button></div></div>
           <div class="code-panel on" data-panel="go"><pre><code class="language-go">// File naming convention: foo.go is tested by foo_test.go in the same package.
 // Test functions are func TestXxx(t *testing.T), the `go test` tool finds them.
 func TestDiscount_AppliesPercentage(t *testing.T) {
@@ -1001,7 +1001,47 @@ def test_discount_applies_percentage():
 
     # Assert, pytest prints actual vs expected automatically on failure
     assert total == 180</code></pre></div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">// In jest or vitest
+function applyDiscount(cartTotal: number, percent: number): number {
+    return cartTotal - (cartTotal * percent / 100);
+}
+
+describe(&#x27;applyDiscount&#x27;, () =&gt; {
+    it(&#x27;applies the discount correctly&#x27;, () =&gt; {
+        // Arrange
+        const total = 200;
+        const percent = 10;
+        // Act
+        const result = applyDiscount(total, percent);
+        // Assert
+        expect(result).toBe(180);
+    });
+});</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">fn apply_discount(cart_total: u32, percent: u32) -&gt; u32 {
+    cart_total - (cart_total * percent / 100)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_apply_discount() {
+        // Arrange
+        let total = 200;
+        let percent = 10;
+        // Act
+        let result = apply_discount(total, percent);
+        // Assert
+        assert_eq!(result, 180);
+    }
+}</code></pre>
+          </div>
+</div>
 
         <h4>What makes an assertion good</h4>
         <ul>
@@ -1056,7 +1096,7 @@ def test_discount_applies_percentage():
 
         <div class="codeblock" data-cb>
           <div class="code-bar"><div class="dots"><i></i><i></i><i></i></div>
-            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button></div></div>
+            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button><button data-lang="ts"><span class="lang-ts">&#9679;</span> TypeScript</button><button data-lang="rs"><span class="lang-rs">&#9679;</span> Rust</button></div></div>
           <div class="code-panel on" data-panel="go"><pre><code class="language-go">// The unit: pure logic, no I/O, trivially testable.
 func IsStrongPassword(p string) bool {
     if len(p) < 8 { return false }
@@ -1091,7 +1131,52 @@ def test_accepts_valid_password():
     assert is_strong_password("longEnough9") is True  # meets all rules
 
 # Run:  pytest            (-v verbose, -k strong to filter by name)</code></pre></div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">export function isStrongPassword(p: string): boolean {
+    if (p.length &lt; 8) return false;
+    let hasDigit = false;
+    let hasUpper = false;
+    for (const char of p) {
+        if (char &gt;= &#x27;0&#x27; &amp;&amp; char &lt;= &#x27;9&#x27;) hasDigit = true;
+        if (char &gt;= &#x27;A&#x27; &amp;&amp; char &lt;= &#x27;Z&#x27;) hasUpper = true;
+    }
+    return hasDigit &amp;&amp; hasUpper;
+}
+
+describe(&#x27;isStrongPassword&#x27;, () =&gt; {
+    it(&#x27;rejects short passwords&#x27;, () =&gt; {
+        expect(isStrongPassword(&#x27;short1A&#x27;)).toBe(false);
+    });
+    it(&#x27;accepts valid passwords&#x27;, () =&gt; {
+        expect(isStrongPassword(&#x27;longEnough9&#x27;)).toBe(true);
+    });
+});</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">pub fn is_strong_password(p: &amp;str) -&gt; bool {
+    if p.len() &lt; 8 { return false; }
+    let mut has_digit = false;
+    let mut has_upper = false;
+    for c in p.chars() {
+        if c.is_digit(10) { has_digit = true; }
+        if c.is_uppercase() { has_upper = true; }
+    }
+    has_digit &amp;&amp; has_upper
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_strong_password() {
+        assert!(!is_strong_password(&quot;short1A&quot;));
+        assert!(is_strong_password(&quot;longEnough9&quot;));
+    }
+}</code></pre>
+          </div>
+</div>
 
         <div class="box gotcha"><span class="tag">If a unit is hard to test, the design is the smell</span>
           <p>When a function is painful to unit-test, it reaches into a global, opens a connection, reads the
@@ -1131,7 +1216,7 @@ def test_accepts_valid_password():
 
         <div class="codeblock" data-cb>
           <div class="code-bar"><div class="dots"><i></i><i></i><i></i></div>
-            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button></div></div>
+            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button><button data-lang="ts"><span class="lang-ts">&#9679;</span> TypeScript</button><button data-lang="rs"><span class="lang-rs">&#9679;</span> Rust</button></div></div>
           <div class="code-panel on" data-panel="go"><pre><code class="language-go">// The unit depends on an interface, the seam that lets us substitute a double (sec 6).
 type UserRepo interface{ FindByID(id string) (*User, error) }
 
@@ -1177,7 +1262,87 @@ def test_greet_sends_email():
 
     # assert the INTERACTION happened exactly as expected
     notifier.send.assert_called_once_with("a@x.com", "Hi Ada")</code></pre></div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">interface UserRepo {
+    findById(id: string): Promise&lt;{email: string, name: string}&gt;;
+}
+interface Notifier {
+    send(to: string, msg: string): Promise&lt;void&gt;;
+}
+
+async function greet(repo: UserRepo, notifier: Notifier, id: string) {
+    const u = await repo.findById(id);
+    await notifier.send(u.email, &#x27;Hi &#x27; + u.name);
+}
+
+describe(&#x27;greet&#x27;, () =&gt; {
+    it(&#x27;sends email&#x27;, async () =&gt; {
+        const stubRepo: UserRepo = {
+            findById: async () =&gt; ({ email: &#x27;a@x.com&#x27;, name: &#x27;Ada&#x27; })
+        };
+        const spyNotifier = {
+            calls: 0,
+            lastTo: &#x27;&#x27;,
+            send: async (to: string) =&gt; {
+                spyNotifier.calls++;
+                spyNotifier.lastTo = to;
+            }
+        };
+
+        await greet(stubRepo, spyNotifier, &#x27;u1&#x27;);
+
+        expect(spyNotifier.calls).toBe(1);
+        expect(spyNotifier.lastTo).toBe(&#x27;a@x.com&#x27;);
+    });
+});</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">use std::sync::Mutex;
+
+struct User { email: String, name: String }
+
+trait UserRepo {
+    fn find_by_id(&amp;self, id: &amp;str) -&gt; Result&lt;User, ()&gt;;
+}
+trait Notifier {
+    fn send(&amp;self, to: &amp;str, msg: &amp;str) -&gt; Result&lt;(), ()&gt;;
+}
+
+fn greet(repo: &amp;impl UserRepo, notifier: &amp;impl Notifier, id: &amp;str) -&gt; Result&lt;(), ()&gt; {
+    let u = repo.find_by_id(id)?;
+    notifier.send(&amp;u.email, &amp;format!(&quot;Hi {}&quot;, u.name))
+}
+
+struct StubRepo;
+impl UserRepo for StubRepo {
+    fn find_by_id(&amp;self, _id: &amp;str) -&gt; Result&lt;User, ()&gt; {
+        Ok(User { email: &quot;a@x.com&quot;.into(), name: &quot;Ada&quot;.into() })
+    }
+}
+
+struct SpyNotifier {
+    calls: Mutex&lt;u32&gt;,
+    last_to: Mutex&lt;String&gt;,
+}
+impl Notifier for SpyNotifier {
+    fn send(&amp;self, to: &amp;str, _msg: &amp;str) -&gt; Result&lt;(), ()&gt; {
+        *self.calls.lock().unwrap() += 1;
+        *self.last_to.lock().unwrap() = to.to_string();
+        Ok(())
+    }
+}
+
+#[test]
+fn test_greet() {
+    let repo = StubRepo;
+    let spy = SpyNotifier { calls: Mutex::new(0), last_to: Mutex::new(String::new()) };
+    let _ = greet(&amp;repo, &amp;spy, &quot;u1&quot;);
+    assert_eq!(*spy.calls.lock().unwrap(), 1);
+    assert_eq!(*spy.last_to.lock().unwrap(), &quot;a@x.com&quot;);
+}</code></pre>
+          </div>
+</div>
         <p class="code-cap">Go tends to hand-write small doubles against an interface (explicit, no magic); Python's
           <code>unittest.mock</code> generates flexible doubles that both stub returns and record calls. Same concept,
           different ergonomics.</p>
@@ -1224,7 +1389,7 @@ def test_greet_sends_email():
 
         <div class="codeblock" data-cb>
           <div class="code-bar"><div class="dots"><i></i><i></i><i></i></div>
-            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button></div></div>
+            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button><button data-lang="ts"><span class="lang-ts">&#9679;</span> TypeScript</button><button data-lang="rs"><span class="lang-rs">&#9679;</span> Rust</button></div></div>
           <div class="code-panel on" data-panel="go"><pre><code class="language-go">// Depend on an INTERFACE, not a concrete type, that interface is the seam.
 type OrderRepo interface{ Save(o Order) error }
 
@@ -1269,7 +1434,61 @@ def test_place_rejects_invalid_total():
         svc.place(Order(total=0))
 
 # In production:  OrderService(postgres_repo), same code, real dependency.</code></pre></div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">interface Order { total: number; }
+interface OrderRepo {
+    save(o: Order): Promise&lt;void&gt;;
+}
+
+class OrderService {
+    constructor(private repo: OrderRepo) {}
+
+    async place(o: Order): Promise&lt;void&gt; {
+        if (o.total &lt;= 0) throw new Error(&quot;invalid total&quot;);
+        await this.repo.save(o);
+    }
+}
+
+describe(&#x27;OrderService&#x27;, () =&gt; {
+    it(&#x27;rejects invalid total&#x27;, async () =&gt; {
+        const fakeRepo: OrderRepo = {
+            saved: [],
+            save: async function(o: Order) { this.saved.push(o); }
+        } as any;
+
+        const svc = new OrderService(fakeRepo);
+        await expect(svc.place({ total: 0 })).rejects.toThrow(&quot;invalid total&quot;);
+    });
+});</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">struct Order { total: i32 }
+trait OrderRepo { fn save(&amp;mut self, o: Order) -&gt; Result&lt;(), ()&gt;; }
+
+struct OrderService&lt;R: OrderRepo&gt; { repo: R }
+
+impl&lt;R: OrderRepo&gt; OrderService&lt;R&gt; {
+    fn place(&amp;mut self, o: Order) -&gt; Result&lt;(), ()&gt; {
+        if o.total &lt;= 0 { return Err(()); }
+        self.repo.save(o)
+    }
+}
+
+struct FakeRepo { saved: Vec&lt;Order&gt; }
+impl OrderRepo for FakeRepo {
+    fn save(&amp;mut self, o: Order) -&gt; Result&lt;(), ()&gt; {
+        self.saved.push(o); Ok(())
+    }
+}
+
+#[test]
+fn test_place_rejects_invalid_total() {
+    let mut svc = OrderService { repo: FakeRepo { saved: vec![] } };
+    assert!(svc.place(Order { total: 0 }).is_err());
+}</code></pre>
+          </div>
+</div>
 
         <div class="box key"><span class="tag">Design for testability = good design</span>
           <p>DI, small interfaces, and separating pure logic from I/O aren't "test tricks", they're the same
@@ -1288,7 +1507,7 @@ def test_place_rejects_invalid_total():
 
         <div class="codeblock" data-cb>
           <div class="code-bar"><div class="dots"><i></i><i></i><i></i></div>
-            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button></div></div>
+            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button><button data-lang="ts"><span class="lang-ts">&#9679;</span> TypeScript</button><button data-lang="rs"><span class="lang-rs">&#9679;</span> Rust</button></div></div>
           <div class="code-panel on" data-panel="go"><pre><code class="language-go">func TestApplyDiscount(t *testing.T) {
     // The TABLE: each row is one case with a name.
     cases := []struct {
@@ -1331,7 +1550,46 @@ def test_apply_discount(subtotal, percent, expected):
     assert got == expected
 
 # `pytest -k rounds-down` runs just one case; each shows up as its own test.</code></pre></div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">describe(&#x27;applyDiscount table driven&#x27;, () =&gt; {
+    const cases = [
+        { name: &quot;ten percent off 200&quot;, subtotal: 200, percent: 10, want: 180 },
+        { name: &quot;zero discount&quot;, subtotal: 100, percent: 0, want: 100 },
+        { name: &quot;full discount&quot;, subtotal: 100, percent: 100, want: 0 },
+        { name: &quot;rounds down&quot;, subtotal: 99, percent: 10, want: 89.1 }
+    ];
+
+    it.each(cases)(&#x27;$name&#x27;, ({ subtotal, percent, want }) =&gt; {
+        expect(subtotal - (subtotal * percent / 100)).toBe(want);
+    });
+});</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">fn apply_discount(cart_total: u32, percent: u32) -&gt; u32 {
+    cart_total - (cart_total * percent / 100)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_apply_discount_table() {
+        let cases = vec![
+            (&quot;ten percent off 200&quot;, 200, 10, 180),
+            (&quot;zero discount&quot;, 100, 0, 100),
+            (&quot;full discount&quot;, 100, 100, 0),
+            (&quot;rounds down&quot;, 99, 10, 89),
+        ];
+
+        for (name, subtotal, percent, want) in cases {
+            assert_eq!(apply_discount(subtotal, percent), want, &quot;{}&quot;, name);
+        }
+    }
+}</code></pre>
+          </div>
+</div>
 
         <div class="box note"><span class="tag">Name every case</span>
           <p>The payoff of these idioms isn't just less code, it's that each case becomes an <em>independently
@@ -1400,7 +1658,7 @@ def test_apply_discount(subtotal, percent, expected):
 
         <div class="codeblock" data-cb>
           <div class="code-bar"><div class="dots"><i></i><i></i><i></i></div>
-            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button></div></div>
+            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button><button data-lang="ts"><span class="lang-ts">&#9679;</span> TypeScript</button><button data-lang="rs"><span class="lang-rs">&#9679;</span> Rust</button></div></div>
           <div class="code-panel on" data-panel="go"><pre><code class="language-go">// Build tag keeps slow integration tests out of the fast unit run:
 //   //go:build integration      -&gt; run with:  go test -tags=integration ./...
 func TestUserRepo_SaveAndFind(t *testing.T) {
@@ -1451,7 +1709,54 @@ def test_save_and_find(repo):
     repo.save(User(id="u1", email="a@x.com"))       # act through REAL SQL
     got = repo.find_by_id("u1")
     assert got.email == "a@x.com"                   # round-trips correctly</code></pre></div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">import { Client } from &#x27;pg&#x27;;
+import { PostgreSqlContainer } from &#x27;@testcontainers/postgresql&#x27;;
+
+describe(&#x27;UserRepo&#x27;, () =&gt; {
+    let container: any;
+    let client: Client;
+
+    beforeAll(async () =&gt; {
+        container = await new PostgreSqlContainer().start();
+        client = new Client({ connectionString: container.getConnectionUri() });
+        await client.connect();
+        await client.query(&#x27;CREATE TABLE users (id TEXT, email TEXT)&#x27;);
+    });
+
+    afterAll(async () =&gt; {
+        await client.end();
+        await container.stop();
+    });
+
+    it(&#x27;saves and finds user&#x27;, async () =&gt; {
+        await client.query(&#x27;INSERT INTO users (id, email) VALUES ($1, $2)&#x27;, [&#x27;u1&#x27;, &#x27;a@x.com&#x27;]);
+        const res = await client.query(&#x27;SELECT * FROM users WHERE id = $1&#x27;, [&#x27;u1&#x27;]);
+        expect(res.rows[0].email).toBe(&#x27;a@x.com&#x27;);
+    });
+});</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">// In rust, tests with database might use sqlx and testcontainers-rs.
+// This is a pseudo-implementation to represent the concept.
+/*
+use sqlx::PgPool;
+
+#[tokio::test]
+async fn test_user_repo_save_and_find() {
+    let pool = PgPool::connect(&quot;postgres://user:pass@localhost/db&quot;).await.unwrap();
+    // Act
+    sqlx::query!(&quot;INSERT INTO users (id, email) VALUES ($1, $2)&quot;, &quot;u1&quot;, &quot;a@x.com&quot;)
+        .execute(&amp;pool).await.unwrap();
+    let row = sqlx::query!(&quot;SELECT email FROM users WHERE id = $1&quot;, &quot;u1&quot;)
+        .fetch_one(&amp;pool).await.unwrap();
+    // Assert
+    assert_eq!(row.email, &quot;a@x.com&quot;);
+}
+*/</code></pre>
+          </div>
+</div>
         <p class="code-cap">Both isolate slow tests behind a flag/marker (Go build tags, pytest markers) so the
           millisecond unit suite stays fast and the heavier DB tests run on demand or in CI (sec 19).</p>
 
@@ -1472,7 +1777,7 @@ def test_save_and_find(repo):
 
         <div class="codeblock" data-cb>
           <div class="code-bar"><div class="dots"><i></i><i></i><i></i></div>
-            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button></div></div>
+            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button><button data-lang="ts"><span class="lang-ts">&#9679;</span> TypeScript</button><button data-lang="rs"><span class="lang-rs">&#9679;</span> Rust</button></div></div>
           <div class="code-panel on" data-panel="go"><pre><code class="language-go">import (
     "net/http"
     "net/http/httptest"
@@ -1516,7 +1821,57 @@ def test_create_user_returns_201():
 
 # FastAPI tip: override real dependencies with fakes via app.dependency_overrides
 # so the handler runs but the repo is in-memory, an integration test of the web layer.</code></pre></div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">import request from &#x27;supertest&#x27;;
+import express from &#x27;express&#x27;;
+
+const app = express();
+app.use(express.json());
+app.post(&#x27;/api/v1/users&#x27;, (req, res) =&gt; {
+    res.status(201).json({ id: 1 });
+});
+
+describe(&#x27;POST /api/v1/users&#x27;, () =&gt; {
+    it(&#x27;returns 201&#x27;, async () =&gt; {
+        const response = await request(app)
+            .post(&#x27;/api/v1/users&#x27;)
+            .send({ email: &#x27;a@x.com&#x27;, name: &#x27;Ada&#x27; })
+            .set(&#x27;Content-Type&#x27;, &#x27;application/json&#x27;);
+
+        expect(response.status).toBe(201);
+        expect(response.headers[&#x27;content-type&#x27;]).toMatch(/application/json/);
+    });
+});</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">use axum::{routing::post, Router, response::IntoResponse, http::StatusCode};
+use axum::http::Request;
+use hyper::Body;
+use tower::ServiceExt;
+
+async fn create_user() -&gt; impl IntoResponse {
+    (StatusCode::CREATED, &quot;{&quot;id&quot;: 1}&quot;)
+}
+
+#[tokio::test]
+async fn test_create_user_returns_201() {
+    let app = Router::new().route(&quot;/api/v1/users&quot;, post(create_user));
+    
+    let response = app
+        .oneshot(Request::builder()
+            .method(&quot;POST&quot;)
+            .uri(&quot;/api/v1/users&quot;)
+            .header(&quot;Content-Type&quot;, &quot;application/json&quot;)
+            .body(Body::from(r#&quot;{&quot;email&quot;:&quot;a@x.com&quot;,&quot;name&quot;:&quot;Ada&quot;}&quot;#))
+            .unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+}</code></pre>
+          </div>
+</div>
 
         <div class="box note"><span class="tag">Choose your blast radius</span>
           <p>These tests are flexible: wire in a <em>fake</em> repository and you're integration-testing just the web
@@ -1622,7 +1977,7 @@ def test_create_user_returns_201():
 
         <div class="codeblock" data-cb>
           <div class="code-bar"><div class="dots"><i></i><i></i><i></i></div>
-            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button></div></div>
+            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button><button data-lang="ts"><span class="lang-ts">&#9679;</span> TypeScript</button><button data-lang="rs"><span class="lang-rs">&#9679;</span> Rust</button></div></div>
           <div class="code-panel on" data-panel="go"><pre><code class="language-bash"># Built into the toolchain, no extra dependency.
 go test -cover ./...                       # prints % per package
 
@@ -1636,7 +1991,24 @@ pytest --cov=app                           # coverage for the `app` package
 pytest --cov=app --cov-report=term-missing # show exactly which lines are UNcovered
 pytest --cov=app --cov-report=html         # browsable htmlcov/ report
 pytest --cov=app --cov-branch              # branch coverage, not just line</code></pre></div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript"># Built into the toolchain, no extra dependency.
+go test -cover ./...                       # prints % per package
+
+go test -coverprofile=cover.out ./...      # write a detailed profile
+go tool cover -func=cover.out              # per-function breakdown
+go tool cover -html=cover.out              # open an annotated, line-by-line HTML view</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust"># Built into the toolchain, no extra dependency.
+go test -cover ./...                       # prints % per package
+
+go test -coverprofile=cover.out ./...      # write a detailed profile
+go tool cover -func=cover.out              # per-function breakdown
+go tool cover -html=cover.out              # open an annotated, line-by-line HTML view</code></pre>
+          </div>
+</div>
 
         <h4>Line vs branch coverage</h4>
         <p><strong>Line coverage</strong> asks "was this line run?" <strong>Branch coverage</strong> asks the harder
@@ -1694,7 +2066,7 @@ pytest --cov=app --cov-branch              # branch coverage, not just line</cod
 
         <div class="codeblock" data-cb>
           <div class="code-bar"><div class="dots"><i></i><i></i><i></i></div>
-            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button></div></div>
+            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button><button data-lang="ts"><span class="lang-ts">&#9679;</span> TypeScript</button><button data-lang="rs"><span class="lang-rs">&#9679;</span> Rust</button></div></div>
           <div class="code-panel on" data-panel="go"><pre><code class="language-go">// Go favors explicit helpers over magic. t.Helper() keeps failure line numbers useful.
 // A "factory" with functional options: specify only the fields that matter to the test.
 func newUser(t *testing.T, opts ...func(*User)) User {
@@ -1739,7 +2111,46 @@ def test_signup(temp_store):
     # ...assert...
 
 # Libraries like factory_boy / model_bakery scale this up for complex object graphs.</code></pre></div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">function newUser(opts: any = {}) {
+    return {
+        id: &quot;u1&quot;,
+        email: &quot;default@x.com&quot;,
+        active: true,
+        ...opts
+    };
+}
+
+describe(&#x27;newUser&#x27;, () =&gt; {
+    it(&#x27;overrides defaults&#x27;, () =&gt; {
+        const u = newUser({ email: &#x27;ada@x.com&#x27; });
+        expect(u.email).toBe(&#x27;ada@x.com&#x27;);
+    });
+});</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">struct User {
+    id: String,
+    email: String,
+    active: bool,
+}
+
+fn new_user(email_override: Option&lt;String&gt;) -&gt; User {
+    User {
+        id: &quot;u1&quot;.into(),
+        email: email_override.unwrap_or_else(|| &quot;default@x.com&quot;.into()),
+        active: true,
+    }
+}
+
+#[test]
+fn test_signup() {
+    let u = new_user(Some(&quot;ada@x.com&quot;.into()));
+    assert_eq!(u.email, &quot;ada@x.com&quot;);
+}</code></pre>
+          </div>
+</div>
 
         <div class="box gotcha"><span class="tag">Keep the relevant data visible</span>
           <p>The point of factories is to hide <em>irrelevant</em> setup, not to hide the data a test depends on. If a
@@ -1814,7 +2225,7 @@ def test_signup(temp_store):
 
         <div class="codeblock" data-cb>
           <div class="code-bar"><div class="dots"><i></i><i></i><i></i></div>
-            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button></div></div>
+            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button><button data-lang="ts"><span class="lang-ts">&#9679;</span> TypeScript</button><button data-lang="rs"><span class="lang-rs">&#9679;</span> Rust</button></div></div>
           <div class="code-panel on" data-panel="go"><pre><code class="language-go">// 1) Injected clock, deterministic time.
 type Clock interface{ Now() time.Time }
 type fixedClock struct{ t time.Time }
@@ -1857,7 +2268,38 @@ def test_fetch_rate():
     )
     client = RatesClient("https://api.rates.com")
     assert client.usd_inr() == 83.2</code></pre></div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">import nock from &#x27;nock&#x27;;
+import axios from &#x27;axios&#x27;;
+
+describe(&#x27;FetchRate&#x27;, () =&gt; {
+    it(&#x27;fetches rate from external API&#x27;, async () =&gt; {
+        nock(&#x27;https://api.example.com&#x27;)
+            .get(&#x27;/rates&#x27;)
+            .reply(200, { usd_inr: 83.2 });
+
+        const response = await axios.get(&#x27;https://api.example.com/rates&#x27;);
+        expect(response.data.usd_inr).toBe(83.2);
+    });
+});</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">use std::time::SystemTime;
+
+trait Clock { fn now(&amp;self) -&gt; SystemTime; }
+struct FixedClock { t: SystemTime }
+impl Clock for FixedClock {
+    fn now(&amp;self) -&gt; SystemTime { self.t }
+}
+
+#[test]
+fn test_token_expiry() {
+    let clk = FixedClock { t: SystemTime::now() };
+    assert_eq!(clk.now(), clk.t);
+}</code></pre>
+          </div>
+</div>
 
         <div class="box key"><span class="tag">Determinism is non-negotiable</span>
           <p>A test must produce the same result on every run, on every machine, in any order. The instant real time,
@@ -1887,7 +2329,7 @@ def test_fetch_rate():
 
         <div class="codeblock" data-cb>
           <div class="code-bar"><div class="dots"><i></i><i></i><i></i></div>
-            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button></div></div>
+            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button><button data-lang="ts"><span class="lang-ts">&#9679;</span> TypeScript</button><button data-lang="rs"><span class="lang-rs">&#9679;</span> Rust</button></div></div>
           <div class="code-panel on" data-panel="go"><pre><code class="language-go">// Benchmarks live beside tests; the tool tunes b.N until timing is stable.
 func BenchmarkParseEvent(b *testing.B) {
     payload := []byte(`{"type":"click","ts":1717000000}`)
@@ -1907,7 +2349,32 @@ def test_parse_event_perf(benchmark):
     assert result.type == "click"              # still assert correctness
 
 # Output reports min/mean/median/stddev; --benchmark-compare flags regressions.</code></pre></div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">// For performance testing in TS/JS one might use autocannon or k6
+import autocannon from &#x27;autocannon&#x27;;
+
+async function runBenchmark() {
+    const result = await autocannon({
+        url: &#x27;http://localhost:3000&#x27;,
+        connections: 10,
+        pipelining: 1,
+        duration: 10
+    });
+    console.log(result);
+}</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">// In Rust, Criterion is commonly used for performance/benchmark testing.
+// #[macro_use]
+// extern crate criterion;
+// use criterion::{black_box, Criterion};
+// 
+// fn benchmark_parse(c: &amp;mut Criterion) {
+//     c.bench_function(&quot;parse event&quot;, |b| b.iter(|| black_box(parse_event())));
+// }</code></pre>
+          </div>
+</div>
 
         <div class="codeblock single">
           <div class="code-bar"><div class="dots"><i></i><i></i><i></i></div><span class="filename">load_test.js / a k6 load test (language-agnostic, hits the running service)</span></div>

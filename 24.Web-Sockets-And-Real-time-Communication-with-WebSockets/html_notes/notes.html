@@ -1231,7 +1231,7 @@ Sec-WebSocket-Protocol: chat.v1                  &lt;- the subprotocol the serve
 
         <div class="codeblock" data-cb>
           <div class="code-bar"><div class="dots"><i></i><i></i><i></i></div>
-            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button></div></div>
+            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button><button data-lang="ts"><span class="lang-ts">&#9679;</span> TypeScript</button><button data-lang="rs"><span class="lang-rs">&#9679;</span> Rust</button></div></div>
           <div class="code-panel on" data-panel="go"><pre><code class="language-go">// github.com/gorilla/websocket
 var upgrader = websocket.Upgrader{
     // CheckOrigin guards against cross-site hijacking, DO NOT leave it open (sec 14).
@@ -1281,7 +1281,102 @@ async def ws_handler(ws: WebSocket):
     # FastAPI cleans up the connection when the coroutine returns
 
 # uvicorn app:app, uvicorn speaks the WebSocket protocol for you</code></pre></div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">import { WebSocketServer, WebSocket } from &#x27;ws&#x27;;
+import * as http from &#x27;http&#x27;;
+
+const server = http.createServer();
+const wss = new WebSocketServer({ noServer: true });
+
+server.on(&#x27;upgrade&#x27;, (request, socket, head) =&gt; {
+    // CheckOrigin guards against cross-site hijacking , DO NOT leave it open (sec 14).
+    const origin = request.headers.origin;
+    if (origin !== &quot;https://app.example.com&quot;) {
+        socket.write(&#x27;HTTP/1.1 401 Unauthorized\r\n\r\n&#x27;);
+        socket.destroy();
+        return;
+    }
+
+    wss.handleUpgrade(request, socket, head, (ws) =&gt; {
+        // performs the 101 handshake (sec 4)
+        wss.emit(&#x27;connection&#x27;, ws, request);
+    });
+});
+
+wss.on(&#x27;connection&#x27;, (ws: WebSocket) =&gt; {
+    // the READ LOOP , one per connection
+    ws.on(&#x27;message&#x27;, (message: Buffer, isBinary: boolean) =&gt; {
+        // echo it straight back
+        ws.send(message, { binary: isBinary });
+    });
+
+    ws.on(&#x27;close&#x27;, () =&gt; {
+        // client closed or connection died (sec 6) -&gt; exit, cleanup
+    });
+});
+
+server.listen(8080, () =&gt; {
+    console.log(&#x27;Listening on port 8080&#x27;);
+});</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">use axum::{
+    extract::{
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        TypedHeader,
+    },
+    headers,
+    response::IntoResponse,
+    routing::get,
+    Router,
+};
+use futures::{sink::SinkExt, stream::StreamExt};
+use std::net::SocketAddr;
+
+#[tokio::main]
+async fn main() {
+    let app = Router::new().route(&quot;/ws&quot;, get(ws_handler));
+    
+    let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
+    axum::Server::bind(&amp;addr)
+        .serve(app.into_make_service())
+        .await
+        .unwrap();
+}
+
+async fn ws_handler(
+    ws: WebSocketUpgrade,
+    // CheckOrigin guards against cross-site hijacking , DO NOT leave it open (sec 14).
+    user_agent: Option&lt;TypedHeader&lt;headers::Origin&gt;&gt;,
+) -&gt; impl IntoResponse {
+    let origin = user_agent.map(|o| o.to_string()).unwrap_or_default();
+    
+    // In axum, you would typically check this in a middleware, but here is inline:
+    if origin != &quot;https://app.example.com&quot; {
+        // Return unauthorized or just let it connect and close (omitted for brevity)
+    }
+
+    // performs the 101 handshake (sec 4)
+    ws.on_upgrade(handle_socket)
+}
+
+async fn handle_socket(mut socket: WebSocket) {
+    // the READ LOOP , one per connection
+    while let Some(msg) = socket.next().await {
+        if let Ok(msg) = msg {
+            // echo it straight back
+            if socket.send(msg).await.is_err() {
+                break; // client closed or connection died (sec 6) -&gt; exit, cleanup via drop
+            }
+        } else {
+            break; 
+        }
+    }
+    // socket is dropped and closed automatically (frees the socket)
+}</code></pre>
+          </div>
+</div>
         <p class="code-cap">Go gives each connection a goroutine running a blocking read loop; Python gives each
           connection an async coroutine awaiting messages. Same structure, accept, loop reading, write, expressed in each language's concurrency model.</p>
 
@@ -1303,7 +1398,7 @@ async def ws_handler(ws: WebSocket):
 
         <div class="codeblock" data-cb>
           <div class="code-bar"><div class="dots"><i></i><i></i><i></i></div>
-            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button></div></div>
+            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button><button data-lang="ts"><span class="lang-ts">&#9679;</span> TypeScript</button><button data-lang="rs"><span class="lang-rs">&#9679;</span> Rust</button></div></div>
           <div class="code-panel on" data-panel="go"><pre><code class="language-go">// github.com/gorilla/websocket
 func runClient() {
     // Dial performs the upgrade handshake; header carries auth where allowed (sec 13).
@@ -1349,7 +1444,79 @@ async def run_client():
     # leaving the `async with` block sends a close frame and shuts down (sec 6)
 
 asyncio.run(run_client())</code></pre></div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">import WebSocket from &#x27;ws&#x27;;
+
+function runClient() {
+    const token = &#x27;your-token&#x27;;
+    // Dial performs the upgrade handshake; header carries auth where allowed (sec 13).
+    const ws = new WebSocket(&#x27;wss://api.example.com/ws&#x27;, {
+        headers: {
+            &#x27;Authorization&#x27;: &#x27;Bearer &#x27; + token
+        }
+    });
+
+    ws.on(&#x27;open&#x27;, () =&gt; {
+        // send a message
+        ws.send(JSON.stringify({ type: &#x27;hello&#x27; }));
+        
+        // graceful close: send a close frame, then the socket shuts (sec 6)
+        ws.close(1000, &#x27;bye&#x27;); // 1000 is normal closure
+    });
+
+    ws.on(&#x27;message&#x27;, (data: Buffer) =&gt; {
+        console.log(`recv: ${data}`);
+    });
+
+    ws.on(&#x27;error&#x27;, (err) =&gt; {
+        console.error(err);
+    });
+}
+
+runClient();</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">use futures::{SinkExt, StreamExt};
+use http::Request;
+use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
+
+#[tokio::main]
+async fn run_client() {
+    let token = &quot;your-token&quot;;
+    
+    // Dial performs the upgrade handshake; header carries auth where allowed (sec 13).
+    let request = Request::builder()
+        .uri(&quot;wss://api.example.com/ws&quot;)
+        .header(&quot;Authorization&quot;, format!(&quot;Bearer {}&quot;, token))
+        .body(())
+        .unwrap();
+
+    let (ws_stream, _) = connect_async(request).await.expect(&quot;Failed to connect&quot;);
+    let (mut write, mut read) = ws_stream.split();
+
+    // reader task
+    tokio::spawn(async move {
+        while let Some(message) = read.next().await {
+            if let Ok(msg) = message {
+                println!(&quot;recv: {:?}&quot;, msg);
+            } else {
+                return;
+            }
+        }
+    });
+
+    // send a message
+    write.send(Message::Text(r#&quot;{&quot;type&quot;:&quot;hello&quot;}&quot;#.to_string())).await.unwrap();
+
+    // graceful close: send a close frame, then the socket shuts (sec 6)
+    write.send(Message::Close(Some(tokio_tungstenite::tungstenite::protocol::CloseFrame {
+        code: tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Normal,
+        reason: std::borrow::Cow::Borrowed(&quot;bye&quot;),
+    }))).await.unwrap();
+}</code></pre>
+          </div>
+</div>
 
         <div class="box note"><span class="tag">Backend client = consumer of a stream</span>
           <p>When your service is the client, treat the feed like any unreliable upstream: the connection <em>will</em>
@@ -1392,7 +1559,7 @@ asyncio.run(run_client())</code></pre></div>
 
         <div class="codeblock" data-cb>
           <div class="code-bar"><div class="dots"><i></i><i></i><i></i></div>
-            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button></div></div>
+            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button><button data-lang="ts"><span class="lang-ts">&#9679;</span> TypeScript</button><button data-lang="rs"><span class="lang-rs">&#9679;</span> Rust</button></div></div>
           <div class="code-panel on" data-panel="go"><pre><code class="language-go">type Hub struct {
     clients    map[*Client]bool
     register   chan *Client
@@ -1449,7 +1616,95 @@ class Hub:
 hub = Hub()
 # (asyncio is single-threaded, so the set needs no lock; just don't mutate
 #  it while iterating, collect dead ones, remove after.)</code></pre></div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">import { WebSocket } from &#x27;ws&#x27;;
+
+class Client {
+    ws: WebSocket;
+    sendQueue: any[] = [];
+    
+    constructor(ws: WebSocket) {
+        this.ws = ws;
+    }
+}
+
+class Hub {
+    clients: Set&lt;Client&gt; = new Set();
+
+    register(client: Client) {
+        this.clients.add(client);
+    }
+
+    unregister(client: Client) {
+        this.clients.delete(client);
+        client.ws.close();
+    }
+
+    broadcast(message: string) {
+        for (const client of this.clients) {
+            if (client.ws.readyState === WebSocket.OPEN) {
+                // In Node.js, ws buffer sizes can be checked. 
+                // buffer full -&gt; slow client; drop it (sec 12)
+                if (client.ws.bufferedAmount &gt; 1024 * 1024) { // 1MB limit for example
+                    this.unregister(client);
+                } else {
+                    client.ws.send(message);
+                }
+            }
+        }
+    }
+}</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">use std::collections::HashMap;
+use tokio::sync::mpsc;
+
+type ClientId = usize;
+
+#[derive(Debug)]
+pub enum HubMessage {
+    Register { id: ClientId, tx: mpsc::Sender&lt;String&gt; },
+    Unregister { id: ClientId },
+    Broadcast { msg: String },
+}
+
+pub struct Hub {
+    clients: HashMap&lt;ClientId, mpsc::Sender&lt;String&gt;&gt;,
+    rx: mpsc::Receiver&lt;HubMessage&gt;,
+}
+
+impl Hub {
+    // One task owns the map -&gt; all mutation is serialized here (no locks needed).
+    pub async fn run(mut self) {
+        while let Some(msg) = self.rx.recv().await {
+            match msg {
+                HubMessage::Register { id, tx } =&gt; {
+                    self.clients.insert(id, tx);
+                }
+                HubMessage::Unregister { id } =&gt; {
+                    self.clients.remove(&amp;id); // drop stops the sender
+                }
+                HubMessage::Broadcast { msg } =&gt; {
+                    let mut disconnected = Vec::new();
+                    for (id, tx) in &amp;self.clients {
+                        // buffer full -&gt; slow client; drop it (sec 12)
+                        if let Err(mpsc::error::TrySendError::Full(_)) = tx.try_send(msg.clone()) {
+                            disconnected.push(*id);
+                        } else if let Err(mpsc::error::TrySendError::Closed(_)) = tx.try_send(msg.clone()) {
+                            disconnected.push(*id);
+                        }
+                    }
+                    for id in disconnected {
+                        self.clients.remove(&amp;id);
+                    }
+                }
+            }
+        }
+    }
+}</code></pre>
+          </div>
+</div>
 
         <div class="box gotcha"><span class="tag">Concurrency &amp; cleanup are the whole game</span>
           <p>Two things separate a toy from a real server. <strong>Concurrency safety</strong>: never touch the shared
@@ -1570,7 +1825,7 @@ hub = Hub()
 
         <div class="codeblock" data-cb>
           <div class="code-bar"><div class="dots"><i></i><i></i><i></i></div>
-            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button></div></div>
+            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button><button data-lang="ts"><span class="lang-ts">&#9679;</span> TypeScript</button><button data-lang="rs"><span class="lang-rs">&#9679;</span> Rust</button></div></div>
           <div class="code-panel on" data-panel="go"><pre><code class="language-go">func wsHandler(w http.ResponseWriter, r *http.Request) {
     // AUTHENTICATE FIRST, before upgrading. Reject with a normal HTTP error.
     token := r.URL.Query().Get("token")          // or read a cookie / subprotocol
@@ -1596,7 +1851,101 @@ async def ws_handler(ws: WebSocket):
         return
     await ws.accept()                              # only now complete the handshake
     await serve(ws, user)                          # messages are tied to `user`</code></pre></div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">import { WebSocketServer } from &#x27;ws&#x27;;
+import * as http from &#x27;http&#x27;;
+
+const server = http.createServer();
+const wss = new WebSocketServer({ noServer: true });
+
+async function verifyJWT(token: string): Promise&lt;any&gt; {
+    // your auth logic (auth chapter)
+    if (token === &quot;valid&quot;) return { id: 1, name: &quot;User&quot; };
+    throw new Error(&quot;Invalid token&quot;);
+}
+
+server.on(&#x27;upgrade&#x27;, async (request, socket, head) =&gt; {
+    try {
+        const url = new URL(request.url || &#x27;&#x27;, `http://${request.headers.host}`);
+        // AUTHENTICATE FIRST , before upgrading. Reject with a normal HTTP error.
+        const token = url.searchParams.get(&quot;token&quot;) || &#x27;&#x27;; // or read a cookie / subprotocol
+        
+        const user = await verifyJWT(token);
+        
+        // Only now perform the upgrade; attach the identity to the connection.
+        wss.handleUpgrade(request, socket, head, (ws) =&gt; {
+            wss.emit(&#x27;connection&#x27;, ws, request, user);
+        });
+    } catch (err) {
+        // 401, no upgrade
+        socket.write(&#x27;HTTP/1.1 401 Unauthorized\r\n\r\n&#x27;);
+        socket.destroy();
+    }
+});
+
+wss.on(&#x27;connection&#x27;, (ws, request, user) =&gt; {
+    // every message from this conn is now tied to `user`
+    serve(ws, user);
+});
+
+function serve(ws: any, user: any) {
+    ws.on(&#x27;message&#x27;, (msg: any) =&gt; {
+        console.log(`Message from ${user.name}: ${msg}`);
+    });
+}</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">use axum::{
+    extract::{Query, WebSocketUpgrade, ws::WebSocket},
+    response::{IntoResponse, Response},
+    http::StatusCode,
+};
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct AuthQuery {
+    token: Option&lt;String&gt;,
+}
+
+struct User {
+    id: i32,
+    name: String,
+}
+
+fn verify_jwt(token: &amp;str) -&gt; Result&lt;User, ()&gt; {
+    // your auth logic (auth chapter)
+    if token == &quot;valid&quot; {
+        Ok(User { id: 1, name: &quot;User&quot;.to_string() })
+    } else {
+        Err(())
+    }
+}
+
+async fn ws_handler(
+    ws: WebSocketUpgrade,
+    // AUTHENTICATE FIRST , before upgrading. Reject with a normal HTTP error.
+    query: Query&lt;AuthQuery&gt;, // or read a cookie / subprotocol
+) -&gt; Response {
+    let token = query.token.clone().unwrap_or_default();
+    
+    let user = match verify_jwt(&amp;token) {
+        Ok(u) =&gt; u,
+        Err(_) =&gt; return (StatusCode::UNAUTHORIZED, &quot;unauthorized&quot;).into_response(), // 401, no upgrade
+    };
+
+    // Only now perform the upgrade; attach the identity to the connection.
+    ws.on_upgrade(move |socket| serve(socket, user))
+}
+
+async fn serve(mut socket: WebSocket, user: User) {
+    // every message from this conn is now tied to `user`
+    while let Some(Ok(msg)) = socket.recv().await {
+        println!(&quot;Message from {}: {:?}&quot;, user.name, msg);
+    }
+}</code></pre>
+          </div>
+</div>
 
         <div class="box gotcha"><span class="tag">Authorize on every message, not just at connect</span>
           <p>Authentication at the handshake establishes <em>who</em> the connection belongs to. But a long-lived socket

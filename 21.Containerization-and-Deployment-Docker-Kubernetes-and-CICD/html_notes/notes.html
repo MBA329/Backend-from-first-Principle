@@ -1123,7 +1123,7 @@ body{padding-bottom:80px;}
 
         <div class="codeblock" data-cb>
           <div class="code-bar"><div class="dots"><i></i><i></i><i></i></div>
-            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button></div></div>
+            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button><button data-lang="ts"><span class="lang-ts">&#9679;</span> TypeScript</button><button data-lang="rs"><span class="lang-rs">&#9679;</span> Rust</button></div></div>
           <div class="code-panel on" data-panel="go"><pre><code class="language-dockerfile"># FROM picks the base image, the first (bottom) layer. Pin a version, never :latest
 FROM golang:1.22
 
@@ -1159,7 +1159,50 @@ EXPOSE 8080
 
 # Exec form (JSON array), runs the process directly as PID 1, so signals work (sec  graceful shutdown)
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080"]</code></pre></div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript"># FROM picks the base image, the first (bottom) layer. Pin a version, never :latest
+FROM golang:1.22
+
+# WORKDIR sets the working dir for the instructions that follow (and at runtime)
+WORKDIR /app
+
+# Copy dependency manifests FIRST and download, this layer caches across code edits (sec 7)
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Now copy the source and build the binary
+COPY . .
+RUN go build -o /server ./cmd/server
+
+# Document the port the app listens on (metadata; publishing happens at run time sec 8)
+EXPOSE 8080
+
+# CMD is the default command run when a container starts from this image
+CMD [&quot;/server&quot;]</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust"># FROM picks the base image, the first (bottom) layer. Pin a version, never :latest
+FROM golang:1.22
+
+# WORKDIR sets the working dir for the instructions that follow (and at runtime)
+WORKDIR /app
+
+# Copy dependency manifests FIRST and download, this layer caches across code edits (sec 7)
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Now copy the source and build the binary
+COPY . .
+RUN go build -o /server ./cmd/server
+
+# Document the port the app listens on (metadata; publishing happens at run time sec 8)
+EXPOSE 8080
+
+# CMD is the default command run when a container starts from this image
+CMD [&quot;/server&quot;]</code></pre>
+          </div>
+</div>
 
         <div class="tbl-wrap">
           <table>
@@ -1219,7 +1262,7 @@ CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080"]</code></pre></
 
         <div class="codeblock" data-cb>
           <div class="code-bar"><div class="dots"><i></i><i></i><i></i></div>
-            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button></div></div>
+            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button><button data-lang="ts"><span class="lang-ts">&#9679;</span> TypeScript</button><button data-lang="rs"><span class="lang-rs">&#9679;</span> Rust</button></div></div>
           <div class="code-panel on" data-panel="go"><pre><code class="language-dockerfile"># ---- Stage 1: build with the full Go toolchain ----
 FROM golang:1.22 AS builder
 WORKDIR /app
@@ -1254,7 +1297,44 @@ RUN useradd -m app && chown -R app /app
 USER app                                 # non-root (sec 17)
 EXPOSE 8080
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080"]</code></pre></div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript"># ---- Stage 1: build with the full Go toolchain ----
+FROM golang:1.22 AS builder
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+# static binary, no libc dependency, perfect for a scratch/distroless final image
+RUN CGO_ENABLED=0 go build -o /server ./cmd/server
+
+# ---- Stage 2: tiny runtime, no compiler, non-root ----
+FROM gcr.io/distroless/static:nonroot
+COPY --from=builder /server /server   # copy ONLY the artifact across stages
+EXPOSE 8080
+USER nonroot:nonroot                  # never run as root (sec 17, security)
+ENTRYPOINT [&quot;/server&quot;]
+# Result: a ~10-15 MB image with no shell, no package manager, minimal CVEs</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust"># ---- Stage 1: build with the full Go toolchain ----
+FROM golang:1.22 AS builder
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+# static binary, no libc dependency, perfect for a scratch/distroless final image
+RUN CGO_ENABLED=0 go build -o /server ./cmd/server
+
+# ---- Stage 2: tiny runtime, no compiler, non-root ----
+FROM gcr.io/distroless/static:nonroot
+COPY --from=builder /server /server   # copy ONLY the artifact across stages
+EXPOSE 8080
+USER nonroot:nonroot                  # never run as root (sec 17, security)
+ENTRYPOINT [&quot;/server&quot;]
+# Result: a ~10-15 MB image with no shell, no package manager, minimal CVEs</code></pre>
+          </div>
+</div>
         <p class="code-cap">Go compiles to a single static binary, so the final stage can be near-empty (distroless/scratch).
           Python needs the interpreter, so the win comes from copying a pre-built virtualenv into a <code>-slim</code>
           base instead of carrying the compilers.</p>

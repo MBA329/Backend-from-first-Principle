@@ -664,6 +664,8 @@ pre::-webkit-scrollbar-thumb:hover, .code-body::-webkit-scrollbar-thumb:hover{ba
   margin-right:1px;
   vertical-align:baseline;
 }
+.lang-ts{color:#3178c6;}
+.lang-rs{color:#dea584;}
 
 /* ---------- Arrow icon (replaces the arrow glyphs) ---------- */
 .ico-arrow{display:inline-block;vertical-align:-2px;flex:none;}

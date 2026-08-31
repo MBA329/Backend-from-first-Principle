@@ -1154,7 +1154,7 @@ body{padding-bottom:80px;}
 
         <div class="codeblock" data-cb>
           <div class="code-bar"><div class="dots"><i></i><i></i><i></i></div>
-            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button></div></div>
+            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button><button data-lang="ts"><span class="lang-ts">&#9679;</span> TypeScript</button><button data-lang="rs"><span class="lang-rs">&#9679;</span> Rust</button></div></div>
           <div class="code-panel on" data-panel="go"><pre><code class="language-go">// Using confluent-kafka-go (librdkafka). kafka-go (segmentio) is a pure-Go alternative.
 p, _ := kafka.NewProducer(&kafka.ConfigMap{
     "bootstrap.servers": "localhost:9092",
@@ -1204,7 +1204,78 @@ p.produce(
     on_delivery=on_delivery,
 )
 p.flush()                          # block until queued messages are delivered</code></pre></div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">import { Kafka, CompressionTypes } from &#x27;kafkajs&#x27;;
+
+const kafka = new Kafka({
+  clientId: &#x27;my-app&#x27;,
+  brokers: [&#x27;localhost:9092&#x27;]
+});
+
+const producer = kafka.producer({
+  maxInFlightRequests: 1,
+  idempotent: true // no duplicates on producer retry (sec 9)
+});
+
+async function run() {
+  await producer.connect();
+
+  const topic = &quot;orders&quot;;
+  // The KEY decides the partition -&gt; all events for one order stay ordered (sec 4, sec 10).
+  await producer.send({
+    topic: topic,
+    compression: CompressionTypes.ZSTD,
+    messages: [
+      {
+        key: &#x27;order-42&#x27;,
+        value: JSON.stringify({event: &#x27;placed&#x27;, amount: 1999})
+      }
+    ],
+    acks: -1, // durability: leader + in-sync replicas (sec 5)
+  });
+
+  await producer.disconnect();
+}
+
+run().catch(console.error);</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">use rdkafka::config::ClientConfig;
+use rdkafka::producer::{FutureProducer, FutureRecord};
+use std::time::Duration;
+
+#[tokio::main]
+async fn main() {
+    // Using rdkafka.
+    let producer: FutureProducer = ClientConfig::new()
+        .set(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;)
+        .set(&quot;message.timeout.ms&quot;, &quot;5000&quot;)
+        .set(&quot;acks&quot;, &quot;all&quot;) // durability: leader + in-sync replicas (sec 5)
+        .set(&quot;enable.idempotence&quot;, &quot;true&quot;) // no duplicates on producer retry (sec 9)
+        .set(&quot;linger.ms&quot;, &quot;5&quot;) // wait up to 5ms to batch records (throughput)
+        .set(&quot;compression.type&quot;, &quot;zstd&quot;)
+        .create()
+        .expect(&quot;Producer creation error&quot;);
+
+    let topic = &quot;orders&quot;;
+    
+    // The KEY decides the partition -&gt; all events for one order stay ordered (sec 4, sec 10).
+    let record = FutureRecord::to(topic)
+        .key(&quot;order-42&quot;)
+        .payload(r#&quot;{&quot;event&quot;:&quot;placed&quot;,&quot;amount&quot;:1999}&quot;#);
+
+    // Producing is async + batched
+    match producer.send(record, Duration::from_secs(0)).await {
+        Ok(delivery) =&gt; println!(&quot;Sent: {:?}&quot;, delivery),
+        Err((e, _)) =&gt; println!(&quot;Error: {:?}&quot;, e),
+    }
+
+    // Flush blocks until queued messages are delivered.
+    producer.flush(Duration::from_secs(5));
+}</code></pre>
+          </div>
+</div>
 
         <div class="box gotcha"><span class="tag">No key = round-robin = no ordering</span>
           <p>If you don't set a key, records are spread across partitions (round-robin / sticky), maximizing parallelism
@@ -1257,7 +1328,7 @@ p.flush()                          # block until queued messages are delivered</
 
         <div class="codeblock" data-cb>
           <div class="code-bar"><div class="dots"><i></i><i></i><i></i></div>
-            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button></div></div>
+            <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-go">&#9679;</span> Go</button><button data-lang="py"><span class="lang-py">&#9679;</span> Python</button><button data-lang="ts"><span class="lang-ts">&#9679;</span> TypeScript</button><button data-lang="rs"><span class="lang-rs">&#9679;</span> Rust</button></div></div>
           <div class="code-panel on" data-panel="go"><pre><code class="language-go">c, _ := kafka.NewConsumer(&kafka.ConfigMap{
     "bootstrap.servers": "localhost:9092",
     "group.id":          "billing",        // the consumer GROUP, scale by adding instances
@@ -1296,7 +1367,89 @@ try:
         c.commit(msg)                      # ...THEN commit the offset (at-least-once, sec 9)
 finally:
     c.close()                              # leave the group cleanly -&gt; triggers a rebalance</code></pre></div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">import { Kafka } from &#x27;kafkajs&#x27;;
+
+const kafka = new Kafka({
+  clientId: &#x27;my-app&#x27;,
+  brokers: [&#x27;localhost:9092&#x27;]
+});
+
+// the consumer GROUP ,  scale by adding instances
+const consumer = kafka.consumer({ groupId: &#x27;billing&#x27; });
+
+async function run() {
+  await consumer.connect();
+  
+  // where to start if no committed offset (sec 8)
+  await consumer.subscribe({ topic: &#x27;orders&#x27;, fromBeginning: true });
+
+  await consumer.run({
+    autoCommit: false, // we&#x27;ll commit manually for at-least-once (sec 9)
+    eachMessage: async ({ topic, partition, message }) =&gt; {
+      // do the work FIRST...
+      console.log(`Processing: ${message.value?.toString()}`);
+      
+      // ...THEN commit the offset (at-least-once, sec 9)
+      // Note: kafkajs auto-commits if you don&#x27;t throw an error in eachMessage, 
+      // but to do it manually:
+      /*
+      await consumer.commitOffsets([{
+        topic,
+        partition,
+        offset: (BigInt(message.offset) + 1n).toString()
+      }]);
+      */
+    },
+  });
+}
+
+run().catch(console.error);</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">use rdkafka::config::ClientConfig;
+use rdkafka::consumer::{Consumer, StreamConsumer, CommitMode};
+use rdkafka::Message;
+
+#[tokio::main]
+async fn main() {
+    let consumer: StreamConsumer = ClientConfig::new()
+        .set(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;)
+        .set(&quot;group.id&quot;, &quot;billing&quot;) // the consumer GROUP , scale by adding instances
+        .set(&quot;auto.offset.reset&quot;, &quot;earliest&quot;) // where to start if no committed offset (sec 8)
+        .set(&quot;enable.auto.commit&quot;, &quot;false&quot;) // we&#x27;ll commit manually for at-least-once (sec 9)
+        .create()
+        .expect(&quot;Consumer creation failed&quot;);
+
+    // Kafka assigns this instance some partitions
+    consumer.subscribe(&amp;[&quot;orders&quot;]).expect(&quot;Can&#x27;t subscribe&quot;);
+
+    loop {
+        // blocks for the next record
+        match consumer.recv().await {
+            Err(e) =&gt; println!(&quot;Kafka error: {}&quot;, e),
+            Ok(m) =&gt; {
+                let payload = match m.payload_view::&lt;str&gt;() {
+                    None =&gt; &quot;&quot;,
+                    Some(Ok(s)) =&gt; s,
+                    Some(Err(e)) =&gt; {
+                        println!(&quot;Error while deserializing message payload: {:?}&quot;, e);
+                        &quot;&quot;
+                    }
+                };
+                
+                // process(msg.Value) -&gt; do the work FIRST...
+                println!(&quot;Processing payload: {}&quot;, payload);
+
+                // ...THEN commit the offset (at-least-once, sec 9)
+                consumer.commit_message(&amp;m, CommitMode::Async).unwrap();
+            }
+        };
+    }
+}</code></pre>
+          </div>
+</div>
 
         <div class="box gotcha"><span class="tag">Partitions cap your parallelism</span>
           <p>Because one partition is consumed by at most one consumer <em>per group</em>, a group can usefully have at

@@ -1,0 +1,14 @@
+balance = 100
+
+async fn withdraw(amount: i32):
+    global balance
+    if balance >= amount:               # Check at time T1
+        await process_withdrawal(amount)  # <- yields control here!
+        balance -= amount                 # Deduct at time T2
+
+# Both coroutines see balance=100, both  the check,
+# both deduct 100 -> balance = -100 (invalid!)
+await asyncio.gather(
+    withdraw(100),
+    withdraw(100),
+)

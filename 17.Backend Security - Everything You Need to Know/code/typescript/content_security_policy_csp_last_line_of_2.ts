@@ -1,0 +1,16 @@
+
+ALLOWED_TAGS = ['p', 'b', 'i', 'em', 'strong', 'a', 'ul', 'ol', 'li']
+ALLOWED_ATTRS = {'a': ['href']}
+
+function sanitise_comment(raw_html: string) -> str:
+    # Strip ALL tags not in allow-list, strip dangerous attributes
+    return bleach.clean(
+        raw_html,
+        tags=ALLOWED_TAGS,
+        attributes=ALLOWED_ATTRS,
+        strip=true  # strip disallowed, don't escape
+    )
+
+# <script>...</script> -> stripped entirely
+# <b>bold</b> -> kept
+# <img onerror="..."> -> attribute stripped

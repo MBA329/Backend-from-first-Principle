@@ -1445,7 +1445,7 @@ Date: Sat, 30 May 2026 12:00:00 GMT
           <div class="code-bar">
             <div class="dots"><i></i><i></i><i></i></div>
             <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-dot lang-go"></span> Go</button><button
-                data-lang="py"><span class="lang-dot lang-py"></span> Python</button></div>
+                data-lang="py"><span class="lang-dot lang-py"></span> Python</button><button data-lang="ts"><span class="lang-dot lang-ts"></span> TypeScript</button><button data-lang="rs"><span class="lang-dot lang-ts"></span> Rust</button></div>
           </div>
           <div class="code-panel on" data-panel="go">
             <pre><code class="language-go">package main
@@ -1500,7 +1500,77 @@ def create_note(note: Note, response: Response):
 
 # run: uvicorn main:app --port 8080</code></pre>
           </div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">import express, { Request, Response } from &#x27;express&#x27;;
+
+const app = express();
+app.use(express.json());
+
+interface Note {
+    id: number;
+    title: string;
+    done: boolean;
+}
+
+app.post(&#x27;/api/v1/notes&#x27;, (req: Request, res: Response) =&gt; {
+    // 1. read request body (express.json() handles this)
+    const inNote: Note = req.body;
+    
+    if (!inNote || typeof inNote !== &#x27;object&#x27;) {
+        res.status(400).send(&#x27;invalid JSON&#x27;);
+        return;
+    }
+    
+    // 2. headers FIRST
+    res.setHeader(&#x27;Content-Type&#x27;, &#x27;application/json&#x27;);
+    // 3. status
+    res.status(201);
+    
+    inNote.id = 42;
+    // 4. body LAST
+    res.json(inNote);
+});
+
+app.listen(8080, () =&gt; {
+    console.log(&#x27;Server started on port 8080&#x27;);
+});</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">use actix_web::{web, App, HttpResponse, HttpServer, Responder};
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize)]
+struct Note {
+    id: Option&lt;i32&gt;,
+    title: String,
+    done: bool,
+}
+
+async fn create_note(mut in_note: web::Json&lt;Note&gt;) -&gt; impl Responder {
+    // 1. read request body (web::Json handles deserialization)
+    
+    // 2. headers FIRST (handled by HttpResponse builder)
+    // 3. status
+    // 4. body LAST
+    in_note.id = Some(42);
+    
+    HttpResponse::Created()
+        .content_type(&quot;application/json&quot;)
+        .json(in_note.into_inner())
+}
+
+#[actix_web::main]
+async fn main() -&gt; std::io::Result&lt;()&gt; {
+    HttpServer::new(|| {
+        App::new().route(&quot;/api/v1/notes&quot;, web::post().to(create_note))
+    })
+    .bind(&quot;127.0.0.1:8080&quot;)?
+    .run()
+    .await
+}</code></pre>
+          </div>
+</div>
       </section>
 
       <!-- 4 -->
@@ -1720,7 +1790,7 @@ def create_note(note: Note, response: Response):
           <div class="code-bar">
             <div class="dots"><i></i><i></i><i></i></div>
             <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-dot lang-go"></span> Go</button><button
-                data-lang="py"><span class="lang-dot lang-py"></span> Python</button></div>
+                data-lang="py"><span class="lang-dot lang-py"></span> Python</button><button data-lang="ts"><span class="lang-dot lang-ts"></span> TypeScript</button><button data-lang="rs"><span class="lang-dot lang-ts"></span> Rust</button></div>
           </div>
           <div class="code-panel on" data-panel="go">
             <pre><code class="language-go">func securityHeaders(next http.Handler) http.Handler {
@@ -1749,7 +1819,87 @@ class SecurityHeaders(BaseHTTPMiddleware):
 
 app.add_middleware(SecurityHeaders)</code></pre>
           </div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">import express, { Request, Response, NextFunction } from &#x27;express&#x27;;
+
+const app = express();
+
+function securityHeaders(req: Request, res: Response, next: NextFunction) {
+    res.setHeader(&#x27;Strict-Transport-Security&#x27;, &#x27;max-age=31536000; includeSubDomains&#x27;);
+    res.setHeader(&#x27;Content-Security-Policy&#x27;, &quot;default-src &#x27;self&#x27;&quot;);
+    res.setHeader(&#x27;X-Frame-Options&#x27;, &#x27;DENY&#x27;);
+    res.setHeader(&#x27;X-Content-Type-Options&#x27;, &#x27;nosniff&#x27;);
+    next(); // headers MUST be set before this call
+}
+
+app.use(securityHeaders);
+// app.listen(8080);</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">use actix_web::{dev::{Service, ServiceRequest, ServiceResponse, Transform}, App, Error, HttpResponse, HttpServer};
+use actix_web::http::header;
+use futures_util::future::{ok, Ready};
+use futures_util::future::LocalBoxFuture;
+use std::rc::Rc;
+use std::task::{Context, Poll};
+
+// Actix-web provides a built-in middleware for security headers via DefaultHeaders, 
+// but here is a custom middleware to match the concept:
+
+pub struct SecurityHeaders;
+
+impl&lt;S, B&gt; Transform&lt;S, ServiceRequest&gt; for SecurityHeaders
+where
+    S: Service&lt;ServiceRequest, Response = ServiceResponse&lt;B&gt;, Error = Error&gt; + &#x27;static,
+    S::Future: &#x27;static,
+    B: &#x27;static,
+{
+    type Response = ServiceResponse&lt;B&gt;;
+    type Error = Error;
+    type InitError = ();
+    type Transform = SecurityHeadersMiddleware&lt;S&gt;;
+    type Future = Ready&lt;Result&lt;Self::Transform, Self::InitError&gt;&gt;;
+
+    fn new_transform(&amp;self, service: S) -&gt; Self::Future {
+        ok(SecurityHeadersMiddleware { service: Rc::new(service) })
+    }
+}
+
+pub struct SecurityHeadersMiddleware&lt;S&gt; {
+    service: Rc&lt;S&gt;,
+}
+
+impl&lt;S, B&gt; Service&lt;ServiceRequest&gt; for SecurityHeadersMiddleware&lt;S&gt;
+where
+    S: Service&lt;ServiceRequest, Response = ServiceResponse&lt;B&gt;, Error = Error&gt; + &#x27;static,
+    S::Future: &#x27;static,
+    B: &#x27;static,
+{
+    type Response = ServiceResponse&lt;B&gt;;
+    type Error = Error;
+    type Future = LocalBoxFuture&lt;&#x27;static, Result&lt;Self::Response, Self::Error&gt;&gt;;
+
+    fn poll_ready(&amp;self, ctx: &amp;mut Context&lt;&#x27;_&gt;) -&gt; Poll&lt;Result&lt;(), Self::Error&gt;&gt; {
+        self.service.poll_ready(ctx)
+    }
+
+    fn call(&amp;self, req: ServiceRequest) -&gt; Self::Future {
+        let svc = self.service.clone();
+        Box::pin(async move {
+            let mut res = svc.call(req).await?;
+            let headers = res.headers_mut();
+            headers.insert(header::STRICT_TRANSPORT_SECURITY, &quot;max-age=31536000; includeSubDomains&quot;.parse().unwrap());
+            headers.insert(header::CONTENT_SECURITY_POLICY, &quot;default-src &#x27;self&#x27;&quot;.parse().unwrap());
+            headers.insert(header::HeaderName::from_static(&quot;x-frame-options&quot;), &quot;DENY&quot;.parse().unwrap());
+            headers.insert(header::X_CONTENT_TYPE_OPTIONS, &quot;nosniff&quot;.parse().unwrap());
+            Ok(res)
+        })
+    }
+}
+// App::new().wrap(SecurityHeaders)</code></pre>
+          </div>
+</div>
       </section>
 
       <div class="part-label">Part II / Methods &amp; Semantics</div>
@@ -2128,7 +2278,7 @@ app.add_middleware(SecurityHeaders)</code></pre>
           <div class="code-bar">
             <div class="dots"><i></i><i></i><i></i></div>
             <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-dot lang-go"></span> Go</button><button
-                data-lang="py"><span class="lang-dot lang-py"></span> Python</button></div>
+                data-lang="py"><span class="lang-dot lang-py"></span> Python</button><button data-lang="ts"><span class="lang-dot lang-ts"></span> TypeScript</button><button data-lang="rs"><span class="lang-dot lang-ts"></span> Rust</button></div>
           </div>
           <div class="code-panel on" data-panel="go">
             <pre><code class="language-go">mux := http.NewServeMux()
@@ -2176,7 +2326,91 @@ def patch_note(id: int, patch: dict): ...
 @app.delete("/notes/{id}", status_code=204)     # remove (idempotent)
 def delete_note(id: int): ...</code></pre>
           </div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">import express, { Request, Response } from &#x27;express&#x27;;
+
+const app = express();
+
+// Express router binds method + path. Unmatched routes auto-return 404 (or can be configured for 405).
+app.get(&#x27;/notes&#x27;, listNotes);            // safe, cacheable read
+app.get(&#x27;/notes/:id&#x27;, getNote);
+app.head(&#x27;/notes/:id&#x27;, getNote);         // reuse GET; framework drops the body
+app.post(&#x27;/notes&#x27;, createNote);          // create (server assigns id)
+app.put(&#x27;/notes/:id&#x27;, putNote);          // full replace (idempotent)
+app.patch(&#x27;/notes/:id&#x27;, patchNote);      // partial update
+app.delete(&#x27;/notes/:id&#x27;, deleteNote);    // remove (idempotent)
+
+const db = {
+    find: async (id: string) =&gt; { 
+        if (id !== &quot;1&quot;) throw new Error(&quot;ErrNotFound&quot;);
+        return { id, content: &quot;Note 1&quot; }; 
+    }
+};
+
+async function getNote(req: Request, res: Response) {
+    const id = req.params.id;                    // built-in path params
+    try {
+        const note = await db.find(id);
+        res.setHeader(&#x27;Content-Type&#x27;, &#x27;application/json&#x27;);
+        res.status(200).json(note);              // 200
+    } catch (err: any) {
+        if (err.message === &quot;ErrNotFound&quot;) {
+            res.status(404).send(&#x27;Not Found&#x27;);   // 404
+            return;
+        }
+        res.status(500).send(&#x27;Server Error&#x27;);
+    }
+}
+
+// Dummy functions to satisfy the router
+function listNotes(req: Request, res: Response) {}
+function createNote(req: Request, res: Response) {}
+function putNote(req: Request, res: Response) {}
+function patchNote(req: Request, res: Response) {}
+function deleteNote(req: Request, res: Response) {}</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">use actix_web::{web, App, HttpResponse, HttpServer, Responder};
+use serde::Serialize;
+
+#[derive(Serialize)]
+struct Note {
+    id: String,
+    content: String,
+}
+
+// Actix-web binds method + path. An unmatched method auto-returns 405 Method Not Allowed.
+/*
+App::new()
+    .route(&quot;/notes&quot;, web::get().to(list_notes))      // safe, cacheable read
+    .route(&quot;/notes/{id}&quot;, web::get().to(get_note))
+    .route(&quot;/notes/{id}&quot;, web::head().to(get_note))  // reuse GET; framework drops the body
+    .route(&quot;/notes&quot;, web::post().to(create_note))    // create (server assigns id)
+    .route(&quot;/notes/{id}&quot;, web::put().to(put_note))   // full replace (idempotent)
+    .route(&quot;/notes/{id}&quot;, web::patch().to(patch_note)) // partial update
+    .route(&quot;/notes/{id}&quot;, web::delete().to(delete_note)) // remove (idempotent)
+*/
+
+async fn get_note(id: web::Path&lt;String&gt;) -&gt; impl Responder {
+    let id_val = id.into_inner();                // built-in path params
+    
+    // simulated db.Find
+    if id_val != &quot;1&quot; {
+        return HttpResponse::NotFound().finish(); // 404
+    }
+    
+    let note = Note {
+        id: id_val,
+        content: &quot;Note 1&quot;.to_string(),
+    };
+    
+    HttpResponse::Ok()                           // 200
+        .content_type(&quot;application/json&quot;)
+        .json(note)
+}</code></pre>
+          </div>
+</div>
       </section>
 
       <!-- 7 -->
@@ -2281,7 +2515,7 @@ def delete_note(id: int): ...</code></pre>
           <div class="code-bar">
             <div class="dots"><i></i><i></i><i></i></div>
             <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-dot lang-go"></span> Go</button><button
-                data-lang="py"><span class="lang-dot lang-py"></span> Python</button></div>
+                data-lang="py"><span class="lang-dot lang-py"></span> Python</button><button data-lang="ts"><span class="lang-dot lang-ts"></span> TypeScript</button><button data-lang="rs"><span class="lang-dot lang-ts"></span> Rust</button></div>
           </div>
           <div class="code-panel on" data-panel="go">
             <pre><code class="language-go">var seen sync.Map // key -> []byte result. Use Redis with a TTL in production.
@@ -2316,7 +2550,75 @@ def create_payment(payload: dict, idempotency_key: str = Header(...)):
     seen[idempotency_key] = result       # remember it BEFORE responding
     return result</code></pre>
           </div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">import express, { Request, Response } from &#x27;express&#x27;;
+
+const app = express();
+
+// key -&gt; string result. Use Redis with a TTL in production.
+const seen = new Map&lt;string, string&gt;();
+
+function charge(req: Request): string {
+    return &quot;payment_success&quot;;
+}
+
+app.post(&#x27;/charge&#x27;, (req: Request, res: Response) =&gt; {
+    const key = req.header(&#x27;Idempotency-Key&#x27;);
+    if (!key) {
+        res.status(400).send(&#x27;missing Idempotency-Key&#x27;);
+        return;
+    }
+    
+    if (seen.has(key)) {                      // replay: return the stored result
+        const cached = seen.get(key);
+        res.status(200).send(cached);
+        return;
+    }
+    
+    const result = charge(req);               // the real, non-idempotent work
+    seen.set(key, result);                    // remember it BEFORE responding
+    
+    res.status(201).send(result);
+});</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">use actix_web::{web, HttpRequest, HttpResponse, Responder};
+use std::collections::HashMap;
+use std::sync::Mutex;
+
+// key -&gt; String result. Use Redis with a TTL in production.
+struct AppState {
+    seen: Mutex&lt;HashMap&lt;String, String&gt;&gt;,
+}
+
+fn charge(_req: &amp;HttpRequest) -&gt; String {
+    &quot;payment_success&quot;.to_string()
+}
+
+async fn create_payment(req: HttpRequest, data: web::Data&lt;AppState&gt;) -&gt; impl Responder {
+    let key_header = req.headers().get(&quot;Idempotency-Key&quot;);
+    
+    let key = match key_header {
+        Some(k) =&gt; match k.to_str() {
+            Ok(s) =&gt; s.to_string(),
+            Err(_) =&gt; return HttpResponse::BadRequest().body(&quot;invalid Idempotency-Key&quot;),
+        },
+        None =&gt; return HttpResponse::BadRequest().body(&quot;missing Idempotency-Key&quot;),
+    };
+    
+    let mut seen = data.seen.lock().unwrap();
+    if let Some(cached) = seen.get(&amp;key) {    // replay: return the stored result
+        return HttpResponse::Ok().body(cached.clone());
+    }
+    
+    let result = charge(&amp;req);                // the real, non-idempotent work
+    seen.insert(key, result.clone());         // remember it BEFORE responding
+    
+    HttpResponse::Created().body(result)
+}</code></pre>
+          </div>
+</div>
         <p>Idempotency keys protect against <em>duplicate execution</em>. A different but related hazard, two clients
           overwriting each other's edits (the "lost update"), needs a complementary tool: optimistic concurrency with
           <code>If-Match</code> and ETags, covered in sec 13.</p>
@@ -2493,7 +2795,7 @@ Cookie: session=abc123</code></pre>
           <div class="code-bar">
             <div class="dots"><i></i><i></i><i></i></div>
             <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-dot lang-go"></span> Go</button><button
-                data-lang="py"><span class="lang-dot lang-py"></span> Python</button></div>
+                data-lang="py"><span class="lang-dot lang-py"></span> Python</button><button data-lang="ts"><span class="lang-dot lang-ts"></span> TypeScript</button><button data-lang="rs"><span class="lang-dot lang-ts"></span> Rust</button></div>
           </div>
           <div class="code-panel on" data-panel="go">
             <pre><code class="language-go">// Set a secure session cookie after login (stateful)
@@ -2553,7 +2855,156 @@ def require_token(cred: HTTPAuthorizationCredentials = Depends(bearer)):
 def me(_=Depends(require_token)):
     return {"ok": True}</code></pre>
           </div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">import express, { Request, Response, NextFunction } from &#x27;express&#x27;;
+import crypto from &#x27;crypto&#x27;;
+
+const app = express();
+const sessions = new Map&lt;string, string&gt;(); // server-side session store (use Redis)
+const userID = &quot;user123&quot;;
+
+function newSessionID() {
+    return crypto.randomBytes(16).toString(&#x27;hex&#x27;);
+}
+
+// Set a secure session cookie after login (stateful)
+app.post(&#x27;/login&#x27;, (req: Request, res: Response) =&gt; {
+    const sid = newSessionID();
+    sessions.set(sid, userID);
+    
+    res.cookie(&#x27;session&#x27;, sid, {
+        httpOnly: true,                      // JS can&#x27;t read it
+        secure: true,                        // HTTPS only
+        sameSite: &#x27;strict&#x27;,                  // CSRF defense
+        maxAge: 3600000,                     // in ms for express
+        path: &#x27;/&#x27;
+    });
+    res.send(&#x27;logged in&#x27;);
+});
+
+function validJWT(token: string) {
+    return token === &quot;valid_token&quot;;
+}
+
+// Bearer-token auth middleware (stateless)
+function requireToken(req: Request, res: Response, next: NextFunction) {
+    const auth = req.header(&#x27;Authorization&#x27;);
+    if (!auth || !auth.startsWith(&#x27;Bearer &#x27;) || !validJWT(auth.substring(7))) {
+        res.setHeader(&#x27;WWW-Authenticate&#x27;, &#x27;Bearer&#x27;);
+        res.status(401).send(&#x27;unauthorized&#x27;); // 401
+        return;
+    }
+    next();
+}</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">use actix_web::{web, cookie::{Cookie, SameSite}, dev::{Service, ServiceRequest, ServiceResponse, Transform}, App, Error, HttpMessage, HttpRequest, HttpResponse, HttpServer, Responder};
+use futures_util::future::{ok, Ready, LocalBoxFuture};
+use std::rc::Rc;
+use std::task::{Context, Poll};
+use std::collections::HashMap;
+use std::sync::Mutex;
+
+struct AppState {
+    sessions: Mutex&lt;HashMap&lt;String, String&gt;&gt;, // server-side session store (use Redis)
+}
+
+fn new_session_id() -&gt; String {
+    &quot;random_uuid_here&quot;.to_string() // mock
+}
+
+// Set a secure session cookie after login (stateful)
+async fn login(data: web::Data&lt;AppState&gt;) -&gt; impl Responder {
+    let sid = new_session_id();
+    let user_id = &quot;user123&quot;.to_string();
+    
+    let mut sessions = data.sessions.lock().unwrap();
+    sessions.insert(sid.clone(), user_id);
+    
+    let cookie = Cookie::build(&quot;session&quot;, sid)
+        .http_only(true)                    // JS can&#x27;t read it
+        .secure(true)                       // HTTPS only
+        .same_site(SameSite::Strict)        // CSRF defense
+        .max_age(actix_web::cookie::time::Duration::seconds(3600))
+        .path(&quot;/&quot;)
+        .finish();
+
+    HttpResponse::Ok()
+        .cookie(cookie)
+        .body(&quot;logged in&quot;)
+}
+
+fn valid_jwt(token: &amp;str) -&gt; bool {
+    token == &quot;valid_token&quot;
+}
+
+// Bearer-token auth middleware (stateless) - Using Actix Web Middleware Pattern
+pub struct RequireToken;
+
+impl&lt;S, B&gt; Transform&lt;S, ServiceRequest&gt; for RequireToken
+where
+    S: Service&lt;ServiceRequest, Response = ServiceResponse&lt;B&gt;, Error = Error&gt; + &#x27;static,
+    S::Future: &#x27;static,
+    B: &#x27;static,
+{
+    type Response = ServiceResponse&lt;B&gt;;
+    type Error = Error;
+    type InitError = ();
+    type Transform = RequireTokenMiddleware&lt;S&gt;;
+    type Future = Ready&lt;Result&lt;Self::Transform, Self::InitError&gt;&gt;;
+
+    fn new_transform(&amp;self, service: S) -&gt; Self::Future {
+        ok(RequireTokenMiddleware { service: Rc::new(service) })
+    }
+}
+
+pub struct RequireTokenMiddleware&lt;S&gt; {
+    service: Rc&lt;S&gt;,
+}
+
+impl&lt;S, B&gt; Service&lt;ServiceRequest&gt; for RequireTokenMiddleware&lt;S&gt;
+where
+    S: Service&lt;ServiceRequest, Response = ServiceResponse&lt;B&gt;, Error = Error&gt; + &#x27;static,
+    S::Future: &#x27;static,
+    B: &#x27;static,
+{
+    type Response = ServiceResponse&lt;B&gt;;
+    type Error = Error;
+    type Future = LocalBoxFuture&lt;&#x27;static, Result&lt;Self::Response, Self::Error&gt;&gt;;
+
+    fn poll_ready(&amp;self, ctx: &amp;mut Context&lt;&#x27;_&gt;) -&gt; Poll&lt;Result&lt;(), Self::Error&gt;&gt; {
+        self.service.poll_ready(ctx)
+    }
+
+    fn call(&amp;self, req: ServiceRequest) -&gt; Self::Future {
+        let auth = req.headers().get(&quot;Authorization&quot;).and_then(|h| h.to_str().ok());
+        
+        let valid = match auth {
+            Some(auth_str) if auth_str.starts_with(&quot;Bearer &quot;) =&gt; {
+                valid_jwt(&amp;auth_str[7..])
+            }
+            _ =&gt; false,
+        };
+
+        if !valid {
+            let (req, _pl) = req.into_parts();
+            let response = HttpResponse::Unauthorized()
+                .append_header((&quot;WWW-Authenticate&quot;, &quot;Bearer&quot;))
+                .body(&quot;unauthorized&quot;)
+                .map_into_right_body();
+            return Box::pin(async { Ok(ServiceResponse::new(req, response)) });
+        }
+
+        let svc = self.service.clone();
+        Box::pin(async move {
+            let res = svc.call(req).await?;
+            Ok(res.map_into_left_body())
+        })
+    }
+}</code></pre>
+          </div>
+</div>
       </section>
 
       <!-- 9 -->
@@ -2688,7 +3139,7 @@ def me(_=Depends(require_token)):
           <div class="code-bar">
             <div class="dots"><i></i><i></i><i></i></div>
             <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-dot lang-go"></span> Go</button><button
-                data-lang="py"><span class="lang-dot lang-py"></span> Python</button></div>
+                data-lang="py"><span class="lang-dot lang-py"></span> Python</button><button data-lang="ts"><span class="lang-dot lang-ts"></span> TypeScript</button><button data-lang="rs"><span class="lang-dot lang-ts"></span> Rust</button></div>
           </div>
           <div class="code-panel on" data-panel="go">
             <pre><code class="language-go">func cors(next http.Handler) http.Handler {
@@ -2720,7 +3171,104 @@ app.add_middleware(
     max_age=86400,                           # cache the approval for 24h
 )</code></pre>
           </div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">import express, { Request, Response, NextFunction } from &#x27;express&#x27;;
+
+const app = express();
+
+function cors(req: Request, res: Response, next: NextFunction) {
+    res.setHeader(&#x27;Access-Control-Allow-Origin&#x27;, &#x27;https://example.com&#x27;); // exact, not * (credentials)
+    res.setHeader(&#x27;Access-Control-Allow-Methods&#x27;, &#x27;GET, POST, PUT, PATCH, DELETE&#x27;);
+    res.setHeader(&#x27;Access-Control-Allow-Headers&#x27;, &#x27;Content-Type, Authorization&#x27;);
+    res.setHeader(&#x27;Access-Control-Allow-Credentials&#x27;, &#x27;true&#x27;);
+    res.setHeader(&#x27;Access-Control-Max-Age&#x27;, &#x27;86400&#x27;); // cache the approval for 24h
+    
+    if (req.method === &#x27;OPTIONS&#x27;) {
+        res.status(204).end(); // 204: answer the preflight and stop
+        return;
+    }
+    next();
+}
+
+app.use(cors);</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">use actix_web::{dev::{Service, ServiceRequest, ServiceResponse, Transform}, Error, HttpResponse};
+use actix_web::http::Method;
+use futures_util::future::{ok, Ready, LocalBoxFuture};
+use std::rc::Rc;
+use std::task::{Context, Poll};
+
+// Actix-web provides actix-cors, but here is a custom middleware to match the concept:
+pub struct Cors;
+
+impl&lt;S, B&gt; Transform&lt;S, ServiceRequest&gt; for Cors
+where
+    S: Service&lt;ServiceRequest, Response = ServiceResponse&lt;B&gt;, Error = Error&gt; + &#x27;static,
+    S::Future: &#x27;static,
+    B: &#x27;static,
+{
+    type Response = ServiceResponse&lt;B&gt;;
+    type Error = Error;
+    type InitError = ();
+    type Transform = CorsMiddleware&lt;S&gt;;
+    type Future = Ready&lt;Result&lt;Self::Transform, Self::InitError&gt;&gt;;
+
+    fn new_transform(&amp;self, service: S) -&gt; Self::Future {
+        ok(CorsMiddleware { service: Rc::new(service) })
+    }
+}
+
+pub struct CorsMiddleware&lt;S&gt; {
+    service: Rc&lt;S&gt;,
+}
+
+impl&lt;S, B&gt; Service&lt;ServiceRequest&gt; for CorsMiddleware&lt;S&gt;
+where
+    S: Service&lt;ServiceRequest, Response = ServiceResponse&lt;B&gt;, Error = Error&gt; + &#x27;static,
+    S::Future: &#x27;static,
+    B: &#x27;static,
+{
+    type Response = ServiceResponse&lt;B&gt;;
+    type Error = Error;
+    type Future = LocalBoxFuture&lt;&#x27;static, Result&lt;Self::Response, Self::Error&gt;&gt;;
+
+    fn poll_ready(&amp;self, ctx: &amp;mut Context&lt;&#x27;_&gt;) -&gt; Poll&lt;Result&lt;(), Self::Error&gt;&gt; {
+        self.service.poll_ready(ctx)
+    }
+
+    fn call(&amp;self, req: ServiceRequest) -&gt; Self::Future {
+        let is_options = req.method() == Method::OPTIONS;
+
+        if is_options {
+            let (req, _pl) = req.into_parts();
+            let mut res = HttpResponse::NoContent().finish(); // 204: answer the preflight and stop
+            let headers = res.headers_mut();
+            headers.insert(actix_web::http::header::ACCESS_CONTROL_ALLOW_ORIGIN, &quot;https://example.com&quot;.parse().unwrap());
+            headers.insert(actix_web::http::header::ACCESS_CONTROL_ALLOW_METHODS, &quot;GET, POST, PUT, PATCH, DELETE&quot;.parse().unwrap());
+            headers.insert(actix_web::http::header::ACCESS_CONTROL_ALLOW_HEADERS, &quot;Content-Type, Authorization&quot;.parse().unwrap());
+            headers.insert(actix_web::http::header::ACCESS_CONTROL_ALLOW_CREDENTIALS, &quot;true&quot;.parse().unwrap());
+            headers.insert(actix_web::http::header::ACCESS_CONTROL_MAX_AGE, &quot;86400&quot;.parse().unwrap());
+            
+            return Box::pin(async { Ok(ServiceResponse::new(req, res.map_into_right_body())) });
+        }
+
+        let svc = self.service.clone();
+        Box::pin(async move {
+            let mut res = svc.call(req).await?;
+            let headers = res.headers_mut();
+            headers.insert(actix_web::http::header::ACCESS_CONTROL_ALLOW_ORIGIN, &quot;https://example.com&quot;.parse().unwrap());
+            headers.insert(actix_web::http::header::ACCESS_CONTROL_ALLOW_METHODS, &quot;GET, POST, PUT, PATCH, DELETE&quot;.parse().unwrap());
+            headers.insert(actix_web::http::header::ACCESS_CONTROL_ALLOW_HEADERS, &quot;Content-Type, Authorization&quot;.parse().unwrap());
+            headers.insert(actix_web::http::header::ACCESS_CONTROL_ALLOW_CREDENTIALS, &quot;true&quot;.parse().unwrap());
+            headers.insert(actix_web::http::header::ACCESS_CONTROL_MAX_AGE, &quot;86400&quot;.parse().unwrap());
+            Ok(res.map_into_left_body())
+        })
+    }
+}</code></pre>
+          </div>
+</div>
 
         <h3>Common misconception: does CORS protect the server?</h3>
         <p>A frequent question is: "if a script can just ignore CORS with <code>curl</code> or a custom HTTP client,
@@ -3027,7 +3575,7 @@ app.add_middleware(
           <div class="code-bar">
             <div class="dots"><i></i><i></i><i></i></div>
             <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-dot lang-go"></span> Go</button><button
-                data-lang="py"><span class="lang-dot lang-py"></span> Python</button></div>
+                data-lang="py"><span class="lang-dot lang-py"></span> Python</button><button data-lang="ts"><span class="lang-dot lang-ts"></span> TypeScript</button><button data-lang="rs"><span class="lang-dot lang-ts"></span> Rust</button></div>
           </div>
           <div class="code-panel on" data-panel="go">
             <pre><code class="language-go">func getUser(w http.ResponseWriter, r *http.Request) {
@@ -3061,7 +3609,81 @@ def get_user(id: int, authorization: str = Header(default="")):
         raise HTTPException(403, "forbidden")           # 403: not allowed
     return user                                         # 200</code></pre>
           </div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">import express, { Request, Response } from &#x27;express&#x27;;
+
+const app = express();
+
+const db = {
+    find: async (id: string) =&gt; {
+        if (id !== &quot;1&quot;) throw new Error(&quot;ErrNotFound&quot;);
+        return { id, visibleTo: (req: Request) =&gt; req.header(&#x27;Authorization&#x27;) === &#x27;user&#x27; };
+    }
+};
+
+async function getUser(req: Request, res: Response) {
+    if (!req.header(&#x27;Authorization&#x27;)) {
+        res.status(401).send(&#x27;login required&#x27;); // 401: who are you?
+        return;
+    }
+    
+    try {
+        const user = await db.find(req.params.id);
+        if (!user.visibleTo(req)) {
+            res.status(403).send(&#x27;forbidden&#x27;); // 403: not allowed
+            return;
+        }
+        res.status(200).json(user); // 200
+    } catch (err: any) {
+        if (err.message === &quot;ErrNotFound&quot;) {
+            res.status(404).send(&#x27;no such user&#x27;); // 404
+            return;
+        }
+        res.status(500).send(&#x27;Server Error&#x27;);
+    }
+}</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">use actix_web::{web, HttpRequest, HttpResponse, Responder};
+use serde::Serialize;
+
+#[derive(Serialize)]
+struct User {
+    id: String,
+}
+
+impl User {
+    fn visible_to(&amp;self, req: &amp;HttpRequest) -&gt; bool {
+        if let Some(auth) = req.headers().get(&quot;Authorization&quot;) {
+            return auth.to_str().unwrap_or(&quot;&quot;) == &quot;user&quot;;
+        }
+        false
+    }
+}
+
+async fn get_user(req: HttpRequest, id: web::Path&lt;String&gt;) -&gt; impl Responder {
+    if req.headers().get(&quot;Authorization&quot;).is_none() {
+        return HttpResponse::Unauthorized().body(&quot;login required&quot;); // 401: who are you?
+    }
+    
+    let id_val = id.into_inner();
+    
+    // simulated db.Find
+    if id_val != &quot;1&quot; {
+        return HttpResponse::NotFound().body(&quot;no such user&quot;);       // 404
+    }
+    
+    let user = User { id: id_val };
+    
+    if !user.visible_to(&amp;req) {
+        return HttpResponse::Forbidden().body(&quot;forbidden&quot;);         // 403: not allowed
+    }
+    
+    HttpResponse::Ok().json(user)                                   // 200
+}</code></pre>
+          </div>
+</div>
       </section>
 
       <!-- 11 -->
@@ -3253,7 +3875,7 @@ def get_user(id: int, authorization: str = Header(default="")):
           <div class="code-bar">
             <div class="dots"><i></i><i></i><i></i></div>
             <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-dot lang-go"></span> Go</button><button
-                data-lang="py"><span class="lang-dot lang-py"></span> Python</button></div>
+                data-lang="py"><span class="lang-dot lang-py"></span> Python</button><button data-lang="ts"><span class="lang-dot lang-ts"></span> TypeScript</button><button data-lang="rs"><span class="lang-dot lang-ts"></span> Rust</button></div>
           </div>
           <div class="code-panel on" data-panel="go">
             <pre><code class="language-go">// Permanent move that must keep the method/body -> 308
@@ -3281,7 +3903,52 @@ def submit_form():
     rid = save()
     return RedirectResponse(f"/results/{rid}", status_code=303)  # forces GET</code></pre>
           </div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">import express, { Request, Response } from &#x27;express&#x27;;
+
+const app = express();
+
+// Permanent move that must keep the method/body -&gt; 308
+app.all(&#x27;/oldRoute/:id&#x27;, (req: Request, res: Response) =&gt; {
+    res.redirect(308, `/person/${req.params.id}`); // 308
+});
+
+function save(req: Request): string {
+    return &quot;new_id&quot;;
+}
+
+// Post/Redirect/Get -&gt; 303 so a browser refresh won&#x27;t re-POST the form
+app.post(&#x27;/submitForm&#x27;, (req: Request, res: Response) =&gt; {
+    const id = save(req);
+    res.redirect(303, `/results/${id}`); // 303 (forces GET)
+});</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">use actix_web::{web, HttpRequest, HttpResponse, Responder};
+
+// Permanent move that must keep the method/body -&gt; 308
+async fn old_route(id: web::Path&lt;String&gt;) -&gt; impl Responder {
+    let target = format!(&quot;/person/{}&quot;, id.into_inner());
+    HttpResponse::PermanentRedirect() // 308
+        .insert_header((&quot;Location&quot;, target))
+        .finish()
+}
+
+fn save(_req: &amp;HttpRequest) -&gt; String {
+    &quot;new_id&quot;.to_string()
+}
+
+// Post/Redirect/Get -&gt; 303 so a browser refresh won&#x27;t re-POST the form
+async fn submit_form(req: HttpRequest) -&gt; impl Responder {
+    let id = save(&amp;req);
+    let target = format!(&quot;/results/{}&quot;, id);
+    HttpResponse::SeeOther() // 303 (forces GET)
+        .insert_header((&quot;Location&quot;, target))
+        .finish()
+}</code></pre>
+          </div>
+</div>
       </section>
 
       <!-- 12 -->
@@ -3433,7 +4100,7 @@ def submit_form():
           <div class="code-bar">
             <div class="dots"><i></i><i></i><i></i></div>
             <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-dot lang-go"></span> Go</button><button
-                data-lang="py"><span class="lang-dot lang-py"></span> Python</button></div>
+                data-lang="py"><span class="lang-dot lang-py"></span> Python</button><button data-lang="ts"><span class="lang-dot lang-ts"></span> TypeScript</button><button data-lang="rs"><span class="lang-dot lang-ts"></span> Rust</button></div>
           </div>
           <div class="code-panel on" data-panel="go">
             <pre><code class="language-go">func getResource(w http.ResponseWriter, r *http.Request) {
@@ -3465,7 +4132,62 @@ def get_resource(request: Request):
     return Response(content=body, status_code=200,
                     headers={"ETag": etag, "Cache-Control": "max-age=10"})</code></pre>
           </div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">import express, { Request, Response } from &#x27;express&#x27;;
+import crypto from &#x27;crypto&#x27;;
+
+const app = express();
+
+function loadResource(): Buffer {
+    return Buffer.from(&quot;hello world&quot;);
+}
+
+app.get(&#x27;/resource&#x27;, (req: Request, res: Response) =&gt; {
+    const body = loadResource();
+    const sum = crypto.createHash(&#x27;sha256&#x27;).update(body).digest(&#x27;hex&#x27;);
+    const etag = `&quot;${sum.substring(0, 16)}&quot;`; // fingerprint of the content
+    
+    if (req.header(&#x27;If-None-Match&#x27;) === etag) { // client already has this exact version
+        res.status(304).end();                  // 304, no body, payload saved
+        return;
+    }
+    
+    res.setHeader(&#x27;ETag&#x27;, etag);
+    res.setHeader(&#x27;Cache-Control&#x27;, &#x27;max-age=10&#x27;);
+    res.status(200).send(body);                 // 200 + body
+});</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">use actix_web::{HttpRequest, HttpResponse, Responder};
+use sha2::{Sha256, Digest};
+use hex;
+
+fn load_resource() -&gt; Vec&lt;u8&gt; {
+    b&quot;hello world&quot;.to_vec()
+}
+
+async fn get_resource(req: HttpRequest) -&gt; impl Responder {
+    let body = load_resource();
+    
+    let mut hasher = Sha256::new();
+    hasher.update(&amp;body);
+    let result = hasher.finalize();
+    let etag = format!(&quot;&quot;{}&quot;&quot;, hex::encode(&amp;result[..8])); // fingerprint of the content
+    
+    if let Some(if_none_match) = req.headers().get(&quot;If-None-Match&quot;) {
+        if if_none_match.to_str().unwrap_or(&quot;&quot;) == etag {   // client already has this exact version
+            return HttpResponse::NotModified().finish();    // 304, no body, payload saved
+        }
+    }
+    
+    HttpResponse::Ok()
+        .insert_header((&quot;ETag&quot;, etag))
+        .insert_header((&quot;Cache-Control&quot;, &quot;max-age=10&quot;))
+        .body(body)                                         // 200 + body
+}</code></pre>
+          </div>
+</div>
         <div class="box note"><span class="tag">In practice + the Vary trap</span>
           <p>Hand-managing ETags is error-prone, forget to bump one on a change and clients serve stale data
             indefinitely. For static assets prefer <code>immutable</code> + content-hashed filenames; for API data,
@@ -3642,7 +4364,7 @@ def get_resource(request: Request):
           <div class="code-bar">
             <div class="dots"><i></i><i></i><i></i></div>
             <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-dot lang-go"></span> Go</button><button
-                data-lang="py"><span class="lang-dot lang-py"></span> Python</button></div>
+                data-lang="py"><span class="lang-dot lang-py"></span> Python</button><button data-lang="ts"><span class="lang-dot lang-ts"></span> TypeScript</button><button data-lang="rs"><span class="lang-dot lang-ts"></span> Rust</button></div>
           </div>
           <div class="code-panel on" data-panel="go">
             <pre><code class="language-go">func updateDoc(w http.ResponseWriter, r *http.Request) {
@@ -3678,7 +4400,91 @@ def update_doc(id: int, request: Request, if_match: str = Header(default="")):
     db.save(doc)
     return Response(status_code=200, headers={"ETag": doc.etag})</code></pre>
           </div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">import express, { Request, Response } from &#x27;express&#x27;;
+import crypto from &#x27;crypto&#x27;;
+
+const app = express();
+
+function newETag() {
+    return crypto.randomBytes(8).toString(&#x27;hex&#x27;);
+}
+
+const db = {
+    get: (id: string) =&gt; ({ id, etag: &quot;current_etag&quot;, apply: (body: any) =&gt; {} }),
+    save: (doc: any) =&gt; {}
+};
+
+app.put(&#x27;/doc/:id&#x27;, (req: Request, res: Response) =&gt; {
+    const doc = db.get(req.params.id);
+    const want = req.header(&#x27;If-Match&#x27;);          // the ETag the client last saw
+    
+    if (!want) {
+        res.status(400).send(&#x27;If-Match required&#x27;);
+        return;
+    }
+    
+    if (want !== doc.etag) {                      // someone changed it first -&gt; conflict
+        res.status(412).send(&#x27;version conflict&#x27;); // 412
+        return;
+    }
+    
+    doc.apply(req.body);
+    doc.etag = newETag();                         // bump the version
+    db.save(doc);
+    
+    res.setHeader(&#x27;ETag&#x27;, doc.etag);
+    res.status(200).end();
+});</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">use actix_web::{web, HttpRequest, HttpResponse, Responder};
+
+fn new_etag() -&gt; String {
+    &quot;new_random_etag&quot;.to_string()
+}
+
+struct Doc {
+    id: String,
+    etag: String,
+}
+
+impl Doc {
+    fn apply(&amp;mut self, _body: &amp;web::Bytes) {}
+}
+
+struct Db;
+impl Db {
+    fn get(&amp;self, id: String) -&gt; Doc {
+        Doc { id, etag: &quot;current_etag&quot;.to_string() }
+    }
+    fn save(&amp;self, _doc: &amp;Doc) {}
+}
+
+async fn update_doc(req: HttpRequest, id: web::Path&lt;String&gt;, body: web::Bytes) -&gt; impl Responder {
+    let db = Db;
+    let mut doc = db.get(id.into_inner());
+    
+    let want = match req.headers().get(&quot;If-Match&quot;) { // the ETag the client last saw
+        Some(h) =&gt; h.to_str().unwrap_or(&quot;&quot;),
+        None =&gt; return HttpResponse::BadRequest().body(&quot;If-Match required&quot;),
+    };
+    
+    if want != doc.etag {                            // someone changed it first -&gt; conflict
+        return HttpResponse::PreconditionFailed().body(&quot;version conflict&quot;); // 412
+    }
+    
+    doc.apply(&amp;body);
+    doc.etag = new_etag();                           // bump the version
+    db.save(&amp;doc);
+    
+    HttpResponse::Ok()
+        .insert_header((&quot;ETag&quot;, doc.etag))
+        .finish()
+}</code></pre>
+          </div>
+</div>
       </section>
 
       <div class="part-label">Part V / Data Transfer &amp; Connections</div>
@@ -3819,7 +4625,7 @@ def update_doc(id: int, request: Request, if_match: str = Header(default="")):
           <div class="code-bar">
             <div class="dots"><i></i><i></i><i></i></div>
             <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-dot lang-go"></span> Go</button><button
-                data-lang="py"><span class="lang-dot lang-py"></span> Python</button></div>
+                data-lang="py"><span class="lang-dot lang-py"></span> Python</button><button data-lang="ts"><span class="lang-dot lang-ts"></span> TypeScript</button><button data-lang="rs"><span class="lang-dot lang-ts"></span> Rust</button></div>
           </div>
           <div class="code-panel on" data-panel="go">
             <pre><code class="language-go">func handler(w http.ResponseWriter, r *http.Request) {
@@ -3849,7 +4655,66 @@ def greeting(accept_language: str = Header(default="en")):
     lang = "es" if accept_language.startswith("es") else "en"
     return {"en": "Hello", "es": "Hola"}[lang]</code></pre>
           </div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">import express, { Request, Response } from &#x27;express&#x27;;
+import zlib from &#x27;zlib&#x27;;
+
+const app = express();
+const bigPayload = { data: &quot;large amount of data&quot; };
+
+app.get(&#x27;/data&#x27;, (req: Request, res: Response) =&gt; {
+    const body = JSON.stringify(bigPayload);
+    
+    res.setHeader(&#x27;Content-Type&#x27;, &#x27;application/json&#x27;);
+    res.setHeader(&#x27;Vary&#x27;, &#x27;Accept-Encoding&#x27;); // tell caches the body varies by encoding
+    
+    const acceptEncoding = req.header(&#x27;Accept-Encoding&#x27;) || &#x27;&#x27;;
+    
+    if (acceptEncoding.includes(&#x27;gzip&#x27;)) {
+        res.setHeader(&#x27;Content-Encoding&#x27;, &#x27;gzip&#x27;);
+        zlib.gzip(body, (err, buffer) =&gt; {
+            if (!err) {
+                res.status(200).send(buffer);
+            }
+        });
+        return;
+    }
+    
+    res.status(200).send(body); // uncompressed fallback for clients that can&#x27;t decode gzip
+});</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">use actix_web::{HttpRequest, HttpResponse, Responder};
+use serde_json::json;
+
+async fn handler(req: HttpRequest) -&gt; impl Responder {
+    let big_payload = json!({ &quot;data&quot;: &quot;large amount of data&quot; });
+    let body = serde_json::to_vec(&amp;big_payload).unwrap();
+    
+    let accept_encoding = req.headers().get(&quot;Accept-Encoding&quot;)
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or(&quot;&quot;);
+        
+    // In actix-web, compression is usually handled by built-in Compress middleware.
+    // To match the concept manually without external gzip crates:
+    if accept_encoding.contains(&quot;gzip&quot;) {
+        let compressed = vec![]; // mocked compressed bytes
+        
+        return HttpResponse::Ok()
+            .content_type(&quot;application/json&quot;)
+            .insert_header((&quot;Vary&quot;, &quot;Accept-Encoding&quot;)) // tell caches the body varies by encoding
+            .insert_header((&quot;Content-Encoding&quot;, &quot;gzip&quot;))
+            .body(compressed);
+    }
+    
+    HttpResponse::Ok()
+        .content_type(&quot;application/json&quot;)
+        .insert_header((&quot;Vary&quot;, &quot;Accept-Encoding&quot;))
+        .body(body) // uncompressed fallback for clients that can&#x27;t decode gzip
+}</code></pre>
+          </div>
+</div>
       </section>
 
       <!-- 15 -->
@@ -3963,7 +4828,7 @@ Content-Length: 48977</code></pre>
           <div class="code-bar">
             <div class="dots"><i></i><i></i><i></i></div>
             <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-dot lang-go"></span> Go</button><button
-                data-lang="py"><span class="lang-dot lang-py"></span> Python</button></div>
+                data-lang="py"><span class="lang-dot lang-py"></span> Python</button><button data-lang="ts"><span class="lang-dot lang-ts"></span> TypeScript</button><button data-lang="rs"><span class="lang-dot lang-ts"></span> Rust</button></div>
           </div>
           <div class="code-panel on" data-panel="go">
             <pre><code class="language-go">// http.ServeContent handles Range, 206, 416 and If-Range for you,
@@ -3983,7 +4848,33 @@ from fastapi.responses import FileResponse
 def download():
     return FileResponse("big.zip", media_type="application/zip")</code></pre>
           </div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">import express, { Request, Response } from &#x27;express&#x27;;
+import path from &#x27;path&#x27;;
+
+const app = express();
+
+// express.static or res.sendFile handles Range, 206, 416 and If-Range for you,
+// driven by the file&#x27;s modtime and an optional ETag.
+app.get(&#x27;/download&#x27;, (req: Request, res: Response) =&gt; {
+    const filePath = path.resolve(__dirname, &#x27;big.zip&#x27;);
+    res.sendFile(filePath);
+});</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">use actix_web::{HttpRequest, Responder};
+use actix_files::NamedFile;
+use std::path::PathBuf;
+
+// actix_files handles Range, 206, 416 and If-Range for you,
+// driven by the file&#x27;s modtime and an optional ETag.
+async fn download(req: HttpRequest) -&gt; actix_web::Result&lt;impl Responder&gt; {
+    let path: PathBuf = &quot;big.zip&quot;.parse().unwrap();
+    Ok(NamedFile::open(path)?.into_response(&amp;req))
+}</code></pre>
+          </div>
+</div>
       </section>
 
       <!-- 16 -->
@@ -4086,7 +4977,7 @@ def download():
           <div class="code-bar">
             <div class="dots"><i></i><i></i><i></i></div>
             <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-dot lang-go"></span> Go</button><button
-                data-lang="py"><span class="lang-dot lang-py"></span> Python</button></div>
+                data-lang="py"><span class="lang-dot lang-py"></span> Python</button><button data-lang="ts"><span class="lang-dot lang-ts"></span> TypeScript</button><button data-lang="rs"><span class="lang-dot lang-ts"></span> Rust</button></div>
           </div>
           <div class="code-panel on" data-panel="go">
             <pre><code class="language-go">srv := &http.Server{
@@ -4107,7 +4998,42 @@ import uvicorn
 uvicorn.run("main:app", host="0.0.0.0", port=8080,
             timeout_keep_alive=60, workers=4)</code></pre>
           </div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">import http from &#x27;http&#x27;;
+import express from &#x27;express&#x27;;
+
+const app = express();
+
+const server = http.createServer(app);
+
+server.timeout = 5000;          // ReadTimeout
+server.keepAliveTimeout = 60000; // IdleTimeout: how long to hold an idle keep-alive conn
+server.headersTimeout = 2000;    // ReadHeaderTimeout: mitigates Slowloris (slow-header attacks)
+
+server.listen(8080, () =&gt; {
+    console.log(&#x27;Server listening on port 8080&#x27;);
+});</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">use actix_web::{App, HttpServer, HttpResponse};
+use std::time::Duration;
+
+#[actix_web::main]
+async fn main() -&gt; std::io::Result&lt;()&gt; {
+    HttpServer::new(|| {
+        App::new().route(&quot;/&quot;, actix_web::web::get().to(|| async { HttpResponse::Ok().finish() }))
+    })
+    .bind(&quot;127.0.0.1:8080&quot;)?
+    .client_request_timeout(Duration::from_secs(5))   // ReadTimeout
+    .client_disconnect_timeout(Duration::from_secs(10)) // WriteTimeout equivalent 
+    .keep_alive(Duration::from_secs(60))              // IdleTimeout: how long to hold an idle keep-alive conn
+    // Actix handles ReadHeaderTimeout conceptually inside request parsing limits
+    .run()
+    .await
+}</code></pre>
+          </div>
+</div>
       </section>
 
       <!-- 17 -->
@@ -4229,7 +5155,7 @@ Content-Type: image/png
           <div class="code-bar">
             <div class="dots"><i></i><i></i><i></i></div>
             <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-dot lang-go"></span> Go</button><button
-                data-lang="py"><span class="lang-dot lang-py"></span> Python</button></div>
+                data-lang="py"><span class="lang-dot lang-py"></span> Python</button><button data-lang="ts"><span class="lang-dot lang-ts"></span> TypeScript</button><button data-lang="rs"><span class="lang-dot lang-ts"></span> Rust</button></div>
           </div>
           <div class="code-panel on" data-panel="go">
             <pre><code class="language-go">// 1. Receive a multipart upload
@@ -4276,7 +5202,73 @@ async def stream():
             await asyncio.sleep(1)
     return StreamingResponse(gen(), media_type="text/event-stream")</code></pre>
           </div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">import express, { Request, Response } from &#x27;express&#x27;;
+import multer from &#x27;multer&#x27;;
+
+const app = express();
+
+// 1. Receive a multipart upload
+// up to 32 MB in memory, overflow spills to disk (handled by multer limits/disk storage)
+const upload = multer({ dest: &#x27;uploads/&#x27;, limits: { fileSize: 32 * 1024 * 1024 } });
+
+app.post(&#x27;/upload&#x27;, upload.single(&#x27;file&#x27;), (req: Request, res: Response) =&gt; {
+    const file = req.file;
+    if (!file) {
+        res.status(400).send(&#x27;no file&#x27;);
+        return;
+    }
+    res.send(`received ${file.originalname}`);
+});
+
+// 2. Stream a response in chunks (Server-Sent Events)
+app.get(&#x27;/stream&#x27;, (req: Request, res: Response) =&gt; {
+    res.setHeader(&#x27;Content-Type&#x27;, &#x27;text/event-stream&#x27;);
+    res.setHeader(&#x27;Connection&#x27;, &#x27;keep-alive&#x27;);
+    
+    let i = 0;
+    const interval = setInterval(() =&gt; {
+        res.write(`data: chunk ${i}\n\n`); // write() pushes each chunk to the client immediately
+        i++;
+        if (i &gt;= 5) {
+            clearInterval(interval);
+            res.end();
+        }
+    }, 1000);
+});</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">use actix_web::{web, HttpResponse, Responder};
+use futures_util::stream::StreamExt as _;
+use std::time::Duration;
+
+// 1. Receive a multipart upload (stubbed for conceptual translation)
+async fn upload(mut payload: web::Payload) -&gt; impl Responder {
+    // Actix payload handles streaming data for multipart
+    let mut bytes = web::BytesMut::new();
+    while let Some(item) = payload.next().await {
+        bytes.extend_from_slice(&amp;item.unwrap());
+    }
+    HttpResponse::Ok().body(&quot;received file&quot;)
+}
+
+// 2. Stream a response in chunks (Server-Sent Events)
+async fn stream() -&gt; impl Responder {
+    let stream = async_stream::stream! {
+        for i in 0..5 {
+            yield Ok::&lt;_, actix_web::Error&gt;(web::Bytes::from(format!(&quot;data: chunk {}\n\n&quot;, i)));
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+    };
+    
+    HttpResponse::Ok()
+        .content_type(&quot;text/event-stream&quot;)
+        .insert_header((&quot;Connection&quot;, &quot;keep-alive&quot;))
+        .streaming(stream)
+}</code></pre>
+          </div>
+</div>
         <div class="box key"><span class="tag">Direction -&gt; tool</span>
           <p><strong>Sending big data up</strong> -&gt; <code>multipart/form-data</code>. &nbsp;<strong>Receiving big data
               down</strong> -&gt; chunked transfer or <code>text/event-stream</code> with keep-alive. &nbsp;<strong>Partial
@@ -4672,7 +5664,7 @@ Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=</code></pre>
           <div class="code-bar">
             <div class="dots"><i></i><i></i><i></i></div>
             <div class="code-tabs"><button class="on" data-lang="go"><span class="lang-dot lang-go"></span> Go</button><button
-                data-lang="py"><span class="lang-dot lang-py"></span> Python</button></div>
+                data-lang="py"><span class="lang-dot lang-py"></span> Python</button><button data-lang="ts"><span class="lang-dot lang-ts"></span> TypeScript</button><button data-lang="rs"><span class="lang-dot lang-ts"></span> Rust</button></div>
           </div>
           <div class="code-panel on" data-panel="go">
             <pre><code class="language-go">// Serve HTTPS directly with a certificate + private-key pair.
@@ -4690,7 +5682,24 @@ uvicorn.run("main:app", host="0.0.0.0", port=443,
             ssl_certfile="server.crt", ssl_keyfile="server.key")
 # Production note: usually terminate TLS at a proxy/LB and run plain HTTP behind it.</code></pre>
           </div>
-        </div>
+        
+          <div class="code-panel" data-panel="ts">
+            <pre><code class="language-typescript">// Serve HTTPS directly with a certificate + private-key pair.
+err const http.ListenAndServeTLS(&quot;:443&quot;, &quot;server.crt&quot;, &quot;server.key&quot;, mux)
+if err != null {
+    log.Fatal(err)
+}
+// Production note: usually you terminate TLS at a proxy/LB and run plain HTTP behind it.</code></pre>
+          </div>
+          <div class="code-panel" data-panel="rs">
+            <pre><code class="language-rust">// Serve HTTPS directly with a certificate + private-key pair.
+err let http.ListenAndServeTLS(&quot;:443&quot;, &quot;server.crt&quot;, &quot;server.key&quot;, mux)
+if err != None {
+    log.Fatal(err)
+}
+// Production note: usually you terminate TLS at a proxy/LB and run plain HTTP behind it.</code></pre>
+          </div>
+</div>
       </section>
 
       <!-- 21 -->
