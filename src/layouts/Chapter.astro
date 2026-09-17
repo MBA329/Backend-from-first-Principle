@@ -1,0 +1,707 @@
+---
+import type { MarkdownHeading } from 'astro';
+import type { CollectionEntry } from 'astro:content';
+import Base from './Base.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import Toc from '../components/Toc.astro';
+import '../styles/prose.css';
+
+interface Props {
+  chapter: CollectionEntry<'chapters'>;
+  headings: MarkdownHeading[];
+  prev?: CollectionEntry<'chapters'>;
+  next?: CollectionEntry<'chapters'>;
+}
+
+const { chapter, headings, prev, next } = Astro.props;
+const { order, title, summary, readingTime } = chapter.data;
+const num = String(order).padStart(2, '0');
+---
+<Base
+  title={`${title} · Chapter ${num} · Backend from First Principles`}
+  description={summary}
+  path={`/${chapter.id}/`}
+>
+  <SiteHeader crumb={`Chapter ${num}`} />
+  <div class="progress" role="presentation"><span class="progress-fill"></span></div>
+
+  <div class="shell">
+    <aside class="rail">
+      <div class="rail-inner">
+        <a class="rail-back" href="/">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="13.5" y1="8" x2="3.5" y2="8" /><polyline points="7.5,4 3.5,8 7.5,12" /></svg>
+          <span>Back</span>
+        </a>
+        <div class="rail-scroll">
+          <Toc headings={headings} />
+        </div>
+      </div>
+    </aside>
+
+    <main class="main" id="main">
+      <header class="chapter-head">
+        <p class="eyebrow">
+          <span class="eyebrow-num">Chapter {num}</span>
+          <span class="dot" aria-hidden="true"></span>
+          <span>{readingTime}</span>
+        </p>
+        <h1 class="chapter-title">{title}</h1>
+        <p class="chapter-summary">{summary}</p>
+      </header>
+
+      <article class="prose" data-pagefind-body>
+        <slot />
+      </article>
+
+      <label class="complete-toggle">
+        <input type="checkbox" data-complete-toggle data-chapter-id={chapter.id} />
+        <span>Mark this chapter complete</span>
+      </label>
+
+      <nav class="chapter-nav" aria-label="Chapter navigation">
+        {prev ? (
+          <a class="nav-card is-prev" href={`/${prev.id}/`} rel="prev">
+            <span class="nav-dir">← Previous</span>
+            <span class="nav-title">{prev.data.navTitle ?? prev.data.title}</span>
+          </a>
+        ) : <span class="nav-card is-empty" aria-hidden="true"></span>}
+
+        {next ? (
+          <a class="nav-card is-next" href={`/${next.id}/`} rel="next">
+            <span class="nav-dir">Next →</span>
+            <span class="nav-title">{next.data.navTitle ?? next.data.title}</span>
+          </a>
+        ) : <span class="nav-card is-empty" aria-hidden="true"></span>}
+      </nav>
+    </main>
+  </div>
+
+  <div
+    class="resume-prompt"
+    data-resume-prompt
+    data-chapter-id={chapter.id}
+    data-chapter-title={chapter.data.navTitle ?? title}
+    data-chapter-num={num}
+    hidden
+    role="dialog"
+    aria-labelledby="resume-prompt-title"
+    aria-describedby="resume-prompt-desc"
+  >
+    <div class="resume-prompt__copy">
+      <p id="resume-prompt-title" class="resume-prompt__title">Continue reading</p>
+      <p id="resume-prompt-desc" class="resume-prompt__desc" data-resume-desc>
+        Pick up where you left off in this chapter.
+      </p>
+    </div>
+    <div class="resume-prompt__actions">
+      <button type="button" class="resume-prompt__dismiss" data-resume-dismiss>Start over</button>
+      <button type="button" class="resume-prompt__go" data-resume-go>Continue</button>
+    </div>
+  </div>
+
+  <noscript>
+    <style>
+      /* Switching needs JS, so show every language stacked rather than
+         stranding the reader on one panel with dead buttons. */
+      .prose .codeblock .code-bar { display: none; }
+      .prose .codeblock .code-panel { display: block; }
+    </style>
+  </noscript>
+
+  <!-- Runs where it sits, after the article markup and before paint, for
+       the same reason as the theme bootstrap in Base.astro: applying a
+       remembered language later swaps every code block at once and shoves
+       the page around. See rehype-code-tabs.mjs for the markup. -->
+  <script is:inline>
+    (function () {
+      var KEY = 'bfp-code-lang';
+      var blocks = document.querySelectorAll('.codeblock');
+      if (!blocks.length) return;
+
+      function activate(block, lang) {
+        var tab = block.querySelector('.code-tab[data-lang="' + lang + '"]');
+        if (!tab) return; // this block has no such language; leave it alone
+        block.querySelectorAll('.code-tab').forEach(function (b) {
+          var on = b === tab;
+          b.classList.toggle('on', on);
+          b.setAttribute('aria-pressed', String(on));
+        });
+        block.querySelectorAll('.code-panel').forEach(function (p) {
+          var on = p.getAttribute('data-panel') === lang;
+          p.classList.toggle('on', on);
+          if (on) p.removeAttribute('hidden');
+          else p.setAttribute('hidden', '');
+        });
+      }
+
+      var stored = null;
+      try { stored = localStorage.getItem(KEY); } catch (e) { /* storage blocked */ }
+      if (stored) {
+        blocks.forEach(function (b) { activate(b, stored); });
+      }
+
+      blocks.forEach(function (block) {
+        block.querySelectorAll('.code-tab').forEach(function (tab) {
+          tab.addEventListener('click', function () {
+            var lang = tab.getAttribute('data-lang');
+            // Every block on the page resizes at once (Go and Python
+            // snippets rarely have the same line count), which shifts
+            // everything below the blocks above this one. Re-anchor on the
+            // clicked button so the block being read stays put.
+            var anchor = tab.getBoundingClientRect().top;
+            try { localStorage.setItem(KEY, lang); } catch (e) { /* storage blocked */ }
+            blocks.forEach(function (b) { activate(b, lang); });
+
+            var delta = tab.getBoundingClientRect().top - anchor;
+            if (delta) {
+              // The document sets scroll-behavior: smooth, which animates
+              // this correction — the block lurches, then glides back, and
+              // reads as jitter. Re-anchoring has to be instant.
+              var root = document.documentElement;
+              var previous = root.style.scrollBehavior;
+              root.style.scrollBehavior = 'auto';
+              window.scrollBy(0, delta);
+              root.style.scrollBehavior = previous;
+            }
+          });
+        });
+      });
+    })();
+  </script>
+</Base>
+
+<style>
+  .progress {
+    position: sticky;
+    top: 56px;
+    z-index: 39;
+    height: 2px;
+    background: transparent;
+  }
+  .progress-fill {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: var(--accent);
+    transform-origin: left;
+  }
+
+  .shell {
+    display: grid;
+    grid-template-columns: var(--rail) minmax(0, 1fr);
+    gap: clamp(var(--space-6), 5vw, var(--space-9));
+    max-width: 96rem;
+    margin-inline: auto;
+    padding-inline: clamp(var(--space-4), 3vw, var(--space-7));
+  }
+
+  .rail { position: relative; }
+  /* The rail is a fixed-height column: Back stays pinned at the top and only
+     the outline below it scrolls. When Back lived inside the scrolling box,
+     the scroll spy's follow-the-active-link scrolling carried it out of view
+     on long chapters, exactly when a reader deep in one wants a way out. */
+  .rail-inner {
+    position: sticky;
+    top: calc(56px + var(--space-5));
+    max-height: calc(100vh - 56px - var(--space-5) - var(--space-6));
+    display: flex;
+    flex-direction: column;
+    padding-bottom: var(--space-6);
+  }
+  /* min-height: 0 lets the flex item shrink below its content so it can
+     scroll. The negative margin + padding gives the outline's hover
+     backgrounds (which reach left past the text) room inside the clip. */
+  .rail-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    margin-left: calc(-1 * var(--space-3));
+    padding-left: var(--space-3);
+    padding-right: var(--space-3);
+  }
+
+  /* Sits above the outline rather than inside <Toc>: it is a way out of the
+     chapter, not one of its sections, so it must not be announced as part of
+     the "On this page" nav. Padding plus the matching negative margin is the
+     .toc-link idiom -- it buys a hover target wider than the text while
+     keeping the label flush with "On this page" below it. */
+  .rail-back {
+    flex: none;
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    margin-left: calc(-1 * var(--space-3));
+    margin-bottom: var(--space-4);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-ui);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--ink-3);
+    text-decoration: none;
+    transition: color 120ms ease, background-color 120ms ease;
+  }
+  .rail-back:hover { color: var(--accent); background: var(--accent-bg); }
+  .rail-back svg {
+    width: 15px;
+    height: 15px;
+    flex: none;
+    transition: transform 120ms ease;
+  }
+  .rail-back:hover svg { transform: translateX(-2px); }
+
+  .main { min-width: 0; padding-block: var(--space-8) var(--space-9); }
+
+  .chapter-head { max-width: var(--measure); margin-bottom: var(--space-8); }
+
+  .eyebrow {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin-bottom: var(--space-4);
+  }
+  .eyebrow-num { color: var(--accent); }
+  .dot { width: 3px; height: 3px; border-radius: 50%; background: currentColor; opacity: 0.6; }
+
+  .chapter-title {
+    font-size: var(--text-3xl);
+    font-weight: 660;
+    letter-spacing: -0.03em;
+  }
+  .chapter-summary {
+    margin-top: var(--space-4);
+    font-family: var(--font-prose);
+    font-size: var(--text-xl);
+    line-height: var(--leading-snug);
+    color: var(--ink-2);
+    text-wrap: pretty;
+  }
+
+  /* --- mark complete ----------------------------------------------------- */
+  .complete-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-top: var(--space-8);
+    padding: var(--space-4) var(--space-5);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 120ms ease, background-color 120ms ease;
+  }
+  .complete-toggle:hover { border-color: var(--line-2); }
+  .complete-toggle:has(input:checked) { border-color: var(--accent); background: var(--accent-bg); }
+  .complete-toggle input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+
+  /* --- prev / next ------------------------------------------------------ */
+  .chapter-nav {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-4);
+    margin-top: var(--space-9);
+    padding-top: var(--space-6);
+    border-top: 1px solid var(--line);
+  }
+  .nav-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-4) var(--space-5);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    text-decoration: none;
+    transition: border-color 120ms ease, background-color 120ms ease;
+  }
+  .nav-card:hover { border-color: var(--accent); background: var(--accent-bg); }
+  .nav-card.is-empty { border: none; background: none; }
+  .is-next { text-align: right; }
+  .nav-dir {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .nav-title { font-weight: 600; font-size: var(--text-base); color: var(--ink); text-wrap: balance; }
+
+  @media (max-width: 1080px) {
+    .shell { grid-template-columns: minmax(0, 1fr); }
+    .rail { display: none; }
+    .main { padding-top: var(--space-7); }
+  }
+  @media (max-width: 620px) {
+    .chapter-nav { grid-template-columns: 1fr; }
+    .is-next { text-align: left; }
+  }
+
+  /* --- resume prompt ---------------------------------------------------- */
+  .resume-prompt {
+    position: fixed;
+    z-index: 85;
+    left: var(--space-4);
+    right: var(--space-4);
+    bottom: var(--space-4);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3) var(--space-4);
+    max-width: 28rem;
+    margin-inline: auto;
+    padding: var(--space-4);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    background: var(--bg);
+    color: var(--ink);
+    box-shadow: var(--shadow-lg);
+    font-family: var(--font-ui);
+  }
+  .resume-prompt[hidden] { display: none; }
+  .resume-prompt__title {
+    margin: 0;
+    font-size: var(--text-sm);
+    font-weight: 650;
+    letter-spacing: -0.01em;
+  }
+  .resume-prompt__desc {
+    margin: var(--space-1) 0 0;
+    font-size: var(--text-xs);
+    line-height: 1.45;
+    color: var(--ink-2);
+  }
+  .resume-prompt__actions {
+    display: flex;
+    gap: var(--space-2);
+    margin-left: auto;
+  }
+  .resume-prompt__dismiss,
+  .resume-prompt__go {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    border-radius: var(--radius);
+    padding: var(--space-2) var(--space-3);
+    line-height: 1.2;
+  }
+  .resume-prompt__dismiss { color: var(--ink-2); }
+  .resume-prompt__dismiss:hover { color: var(--ink); }
+  .resume-prompt__go {
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+  @media (min-width: 480px) {
+    .resume-prompt {
+      left: auto;
+      right: var(--space-5);
+      bottom: var(--space-5);
+      margin-inline: 0;
+    }
+  }
+</style>
+
+<script>
+  // --- reading progress -------------------------------------------------
+  const fill = document.querySelector<HTMLElement>('.progress-fill');
+  const article = document.querySelector<HTMLElement>('.prose');
+
+  if (fill && article) {
+    const update = () => {
+      const start = article.offsetTop;
+      const span = article.offsetHeight - window.innerHeight;
+      const pct = span <= 0 ? 1 : (window.scrollY - start) / span;
+      fill.style.width = `${Math.min(Math.max(pct, 0), 1) * 100}%`;
+    };
+    update();
+    addEventListener('scroll', update, { passive: true });
+    addEventListener('resize', update, { passive: true });
+  }
+
+  // --- exact reading position (issue #60) --------------------------------
+  // Kept on a separate key from bfp-progress so chapter completion stays a
+  // plain string[] of ids and never has to understand section payloads.
+  const POSITION_KEY = 'bfp-reading-position';
+  type PositionEntry = {
+    sectionId: string;
+    sectionTitle: string;
+    chapterTitle: string;
+    chapterNum: string;
+    scrollY: number;
+    updatedAt: number;
+  };
+  type PositionStore = {
+    lastId?: string;
+    positions: Record<string, PositionEntry>;
+  };
+
+  const resumeEl = document.querySelector<HTMLElement>('[data-resume-prompt]');
+  const chapterId = resumeEl?.dataset.chapterId ?? '';
+  const chapterTitle = resumeEl?.dataset.chapterTitle ?? '';
+  const chapterNum = resumeEl?.dataset.chapterNum ?? '';
+
+  const readPositions = (): PositionStore => {
+    try {
+      const raw = JSON.parse(localStorage.getItem(POSITION_KEY) ?? '{}');
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+        return { positions: {} };
+      }
+      const positions =
+        raw.positions && typeof raw.positions === 'object' && !Array.isArray(raw.positions)
+          ? raw.positions
+          : {};
+      return {
+        lastId: typeof raw.lastId === 'string' ? raw.lastId : undefined,
+        positions,
+      };
+    } catch {
+      return { positions: {} };
+    }
+  };
+
+  const writePositions = (store: PositionStore) => {
+    try {
+      localStorage.setItem(POSITION_KEY, JSON.stringify(store));
+    } catch {
+      /* storage blocked */
+    }
+  };
+
+  let restoring = false;
+  let activeSectionId = '';
+  let activeSectionTitle = '';
+  let saveTimer: number | null = null;
+
+  const headingTitle = (id: string): string => {
+    const el = document.getElementById(id);
+    if (!el) return id;
+    // Strip the "#" gutter anchor text Astro injects beside the heading.
+    return (el.textContent ?? id).replace(/^\s*#\s*/, '').trim() || id;
+  };
+
+  const savePosition = (sectionId: string, sectionTitle: string) => {
+    if (!chapterId || restoring) return;
+    // Ignore the very top of the chapter so merely opening it does not
+    // create a Continue target the reader never scrolled into.
+    if (window.scrollY < 180) return;
+
+    const store = readPositions();
+    store.lastId = chapterId;
+    store.positions[chapterId] = {
+      sectionId,
+      sectionTitle,
+      chapterTitle,
+      chapterNum,
+      scrollY: Math.max(0, Math.round(window.scrollY)),
+      updatedAt: Date.now(),
+    };
+    writePositions(store);
+  };
+
+  const scheduleSave = () => {
+    if (saveTimer != null) window.clearTimeout(saveTimer);
+    saveTimer = window.setTimeout(() => {
+      saveTimer = null;
+      savePosition(activeSectionId, activeSectionTitle);
+    }, 400);
+  };
+
+  const restoreTo = (entry: PositionEntry) => {
+    restoring = true;
+    const target = entry.sectionId ? document.getElementById(entry.sectionId) : null;
+    if (target) {
+      target.scrollIntoView({ behavior: 'auto', block: 'start' });
+    } else if (entry.scrollY > 0) {
+      window.scrollTo(0, entry.scrollY);
+    }
+    // Allow a frame for scroll + IntersectionObserver to settle before we
+    // resume writing positions again.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        restoring = false;
+      });
+    });
+  };
+
+  const hideResume = () => {
+    if (resumeEl) resumeEl.hidden = true;
+  };
+
+  const showResume = (entry: PositionEntry) => {
+    if (!resumeEl) return;
+    const desc = resumeEl.querySelector<HTMLElement>('[data-resume-desc]');
+    if (desc) {
+      desc.textContent = entry.sectionTitle
+        ? `Chapter ${entry.chapterNum}: ${entry.chapterTitle} → ${entry.sectionTitle}`
+        : `Chapter ${entry.chapterNum}: ${entry.chapterTitle}`;
+    }
+    resumeEl.hidden = false;
+  };
+
+  // Offer restore when returning mid-chapter without an explicit hash jump.
+  if (chapterId && !location.hash) {
+    const saved = readPositions().positions[chapterId];
+    if (saved && (saved.scrollY > 180 || saved.sectionId)) {
+      showResume(saved);
+      resumeEl?.querySelector<HTMLButtonElement>('[data-resume-go]')?.addEventListener('click', () => {
+        restoreTo(saved);
+        hideResume();
+      });
+      resumeEl?.querySelector<HTMLButtonElement>('[data-resume-dismiss]')?.addEventListener('click', () => {
+        // Start over: clear this chapter's bookmark so the prompt stays gone.
+        const store = readPositions();
+        delete store.positions[chapterId];
+        if (store.lastId === chapterId) store.lastId = undefined;
+        writePositions(store);
+        hideResume();
+        window.scrollTo(0, 0);
+      });
+    }
+  }
+
+  // Persist on leave so a fast navigation still keeps the last spot.
+  const flushSave = () => savePosition(activeSectionId, activeSectionTitle);
+  addEventListener('pagehide', flushSave);
+  addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushSave();
+  });
+
+  // --- table-of-contents scroll spy ------------------------------------
+  // IntersectionObserver rather than a scroll handler: no work on frames
+  // where nothing crossed a boundary.
+  const links = new Map<string, HTMLAnchorElement>();
+  document.querySelectorAll<HTMLAnchorElement>('[data-toc-link]').forEach((a) => {
+    links.set(a.dataset.tocLink!, a);
+  });
+
+  if (links.size) {
+    const visible = new Set<string>();
+    const order = [...links.keys()];
+    const rail = document.querySelector<HTMLElement>('.rail-scroll');
+    let currentActive: string | null = null;
+
+    const scrollToActive = () => {
+      if (!rail || !currentActive || rail.scrollHeight <= rail.clientHeight || rail.matches(':hover')) return;
+      const activeLink = links.get(currentActive);
+      if (!activeLink) return;
+
+      const railRect = rail.getBoundingClientRect();
+      const linkRect = activeLink.getBoundingClientRect();
+      const buffer = 48;
+
+      if (linkRect.top < railRect.top + buffer || linkRect.bottom > railRect.bottom - buffer) {
+        const targetScrollTop =
+          rail.scrollTop +
+          (linkRect.top - railRect.top) -
+          (railRect.height / 2 - linkRect.height / 2);
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        rail.scrollTo({
+          top: Math.max(0, targetScrollTop),
+          behavior: prefersReducedMotion ? 'auto' : 'smooth',
+        });
+      }
+    };
+
+    const paint = () => {
+      // The topmost visible heading wins; if none is on screen (mid-section
+      // scroll) keep the last one we set rather than clearing the rail.
+      const active = order.find((id) => visible.has(id));
+      if (!active || active === currentActive) return;
+      currentActive = active;
+      activeSectionId = active;
+      activeSectionTitle = headingTitle(active);
+      scheduleSave();
+
+      links.forEach((a, id) => {
+        if (id === active) a.setAttribute('aria-current', 'true');
+        else a.removeAttribute('aria-current');
+      });
+
+      scrollToActive();
+    };
+
+    if (rail) {
+      rail.addEventListener('mouseleave', scrollToActive);
+    }
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) visible.add(e.target.id);
+          else visible.delete(e.target.id);
+        }
+        paint();
+      },
+      { rootMargin: '-56px 0px -70% 0px' },
+    );
+
+    links.forEach((_, id) => {
+      const el = document.getElementById(id);
+      if (el) io.observe(el);
+    });
+  }
+
+  // Also refresh scrollY while the reader sits inside a long section.
+  addEventListener('scroll', scheduleSave, { passive: true });
+
+  // --- mark chapter complete --------------------------------------------
+  const PROGRESS_KEY = 'bfp-progress';
+  const readProgress = (): string[] => {
+    // A hand-edited or half-written value would otherwise throw on .includes
+    // below and take the keyboard nav down with it.
+    try {
+      const raw = JSON.parse(localStorage.getItem(PROGRESS_KEY) ?? '[]');
+      return Array.isArray(raw) ? raw : [];
+    } catch { return []; }
+  };
+  const writeProgress = (ids: string[]) => {
+    try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(ids)); } catch { /* storage blocked */ }
+  };
+
+  const completeToggle = document.querySelector<HTMLInputElement>('[data-complete-toggle]');
+  if (completeToggle) {
+    const id = completeToggle.dataset.chapterId!;
+    const sync = () => { completeToggle.checked = readProgress().includes(id); };
+    sync();
+
+    completeToggle.addEventListener('change', () => {
+      const ids = readProgress();
+      const next = completeToggle.checked
+        ? [...ids.filter((x) => x !== id), id]
+        : ids.filter((x) => x !== id);
+      writeProgress(next);
+    });
+
+    // Re-sync on bfcache restore (this script won't re-run) and when
+    // another tab changes the same key.
+    addEventListener('pageshow', sync);
+    addEventListener('storage', (e) => {
+      // e.key is null when another tab calls localStorage.clear().
+      if (e.key === PROGRESS_KEY || e.key === null) sync();
+    });
+  }
+
+  // --- keyboard navigation ---------------------------------------------
+  addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const t = e.target as HTMLElement;
+    if (t.matches('input, textarea, select, [contenteditable]')) return;
+
+    const go = (rel: string) => {
+      const a = document.querySelector<HTMLAnchorElement>(`a[rel='${rel}']`);
+      if (a) location.href = a.href;
+    };
+    if (e.key === 'ArrowLeft') go('prev');
+    if (e.key === 'ArrowRight') go('next');
+  });
+
+</script>

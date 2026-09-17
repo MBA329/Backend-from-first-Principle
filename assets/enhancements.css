@@ -585,6 +585,14 @@ html.theme-transitioning *:after {
   border-top: 1.5px solid var(--line-strong) !important;
   box-shadow: 0 -8px 32px -16px rgba(0, 0, 0, 0.4) !important;
   color: var(--ink) !important;
+
+  transform: translateY(calc(100% - 15px));
+  transition: transform 0.25s ease;
+
+}
+.chapter-nav:hover{
+  transform: translateY(0);
+
 }
 .nav-chapter-link {
   color: var(--ink-soft) !important;
@@ -2321,7 +2329,7 @@ figure.highlight-pulse {
 
 /* Universal Link Hovers */
 a:hover {
-  color: var(--accent-hover) !important;
+  color: var(--accent-hover);
 }
 
 /* Dock Button Hovers */
@@ -2474,4 +2482,3 @@ a:hover {
 .bfp-toc-link.is-active .bfp-toc-num {
   color: var(--accent) !important;
 }
-
